@@ -1,1 +1,17 @@
+.env
 MASTER_PROMPT.md
+first_prompt.txt
+
+# Local configuration and secrets
+.env*
+!.env.example
+
+# Dependencies and generated output
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+generated/
+*.log

@@ -1,0 +1,10 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// The Thought model and first migration belong to Milestone 4.
