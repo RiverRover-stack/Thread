@@ -431,6 +431,13 @@ Leave these exercises for me to implement, with a hint and a verification step.
 Keep the milestone's main flow working and list the exercises in the handoff.
 Do not solve an exercise unless I ask.
 
+The learner is new to TypeScript, web development, and APIs. Start with one small
+change using code already present in the file; avoid combining unfamiliar concepts.
+For each challenge, describe the purpose, exact place to edit, expected behavior,
+two or three progressive hints, and a concrete verification step. Explain unfamiliar
+syntax or API names briefly. Prefer a short exercise in the current feature's data
+flow over unrelated UI extras. Increase difficulty only as the learner gains confidence.
+
 ## Phase Execution
 
 PROJECT_SPEC.md defines the product-level phases.

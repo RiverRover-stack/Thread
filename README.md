@@ -4,10 +4,11 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1, Milestone 2: the Next.js homepage captures microphone audio, provides
+Phase 1, Milestone 3: the Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
-stopping. TypeScript, Tailwind CSS, and Prisma's PostgreSQL configuration are in
-place. AI interpretation, persistence, timeline, and detail pages are not implemented yet.
+stopping. It then sends the raw transcript to a local Gemma model through Ollama
+and validates the structured thought with Zod. Persistence, timeline, and detail
+pages are not implemented yet.
 See PROJECT_SPEC.md for product scope and AGENTS.md for our
 collaboration rules.
 
@@ -84,20 +85,27 @@ Recheck patched Prisma releases before deployment.
 - `app/layout.tsx`: document shell and metadata.
 - `app/globals.css`: Tailwind import and global styles.
 - `next.config.ts`: disables automatic rewriting of our user-owned `AGENTS.md`.
-- `components/capture/VoiceRecorder.tsx`: microphone permission, recording lifecycle,
-  audio Blob, local playback, transcription request/retry, and resource cleanup.
+- `components/capture/VoiceRecorder.tsx`: recording, transcription, local AI request,
+  raw/AI display, retry handling, and resource cleanup.
 - `app/api/transcribe/route.ts`: multipart upload validation and HTTP responses.
 - `lib/speech/index.ts`: provider-independent `transcribeAudio(audio)` entry point.
 - `lib/speech/elevenlabs.ts`: server-only ElevenLabs request and response validation.
 - `lib/speech/errors.ts`: safe error messages and HTTP status mapping.
 - `tests/transcription.test.ts`: mocked route/provider tests; never calls ElevenLabs.
+- `app/api/process/route.ts`: validates transcript requests and returns structured thoughts.
+- `lib/ai/index.ts`: provider-independent `structureThought(transcript)` entry point.
+- `lib/ai/ollama.ts`: local Ollama request, prompt, response parsing, and safe errors.
+- `lib/ai/schemas.ts`: Zod contract and cross-field rules for structured thoughts.
+- `tests/structured-thought.test.ts`: mocked route/Ollama contract and failure tests.
+- `scripts/evaluate-ai.ts`: repeatable semantic quality cases against the real local model.
 - `prisma/schema.prisma`: database provider and future data models.
 - `prisma.config.ts`: Prisma CLI configuration and environment loading.
 - `scripts/check-db.mjs`: read-only PostgreSQL connectivity diagnostic.
 - `.env.example`: required variable names without secrets.
 
 Current capture flow: microphone → MediaRecorder chunks → Blob →
-`POST /api/transcribe` → `transcribeAudio` → ElevenLabs → raw transcript → UI.
+`POST /api/transcribe` → ElevenLabs → raw transcript → `POST /api/process` →
+Ollama/Gemma → Zod-validated structured thought → UI.
 The Blob also has a local object URL for playback. Thread does not persist either
 audio or transcripts yet; refreshing or leaving loses them. Recording again
 replaces them. Audio is sent to ElevenLabs, so it is no longer browser-only.
@@ -127,7 +135,7 @@ audio. Object URLs are released when replaced or when the component unmounts.
 
 If the page fails, inspect the terminal running `npm run dev`. For a database
 failure, start with `npm run db:check`, the PostgreSQL service, database name, and
-local credentials. Gemma hosting will be selected in Milestone 3.
+local credentials. For local AI failures, start with Ollama and `lib/ai/ollama.ts`.
 
 ## Transcription setup and verification (Milestone 2)
 
@@ -169,12 +177,52 @@ real microphone capture, provider credentials, or transcription accuracy.
 Debug in order: browser Network tab (`/api/transcribe` status), route upload checks,
 then `lib/speech/elevenlabs.ts` and local key/account configuration.
 
+## Local Gemma setup and verification (Milestone 3)
+
+Install Ollama and download the local model once with `ollama pull gemma3:4b`.
+Ollama must be running while Thread processes thoughts. `OLLAMA_BASE_URL` and
+`OLLAMA_MODEL` in `.env.local` are optional unless you use a different server or
+model. No Gemma API key is required, and the transcript sent to `/api/process`
+stays on the machine. ElevenLabs transcription is still a cloud request.
+
+1. Run `ollama list` and confirm `gemma3:4b` appears, then start Thread.
+2. Record a messy thought with an action and a question. Confirm the raw text remains
+   under **USER SAID** and a separate title, summary, categories, action, and question
+   appear under **AI INTERPRETED**.
+3. Compare the interpretation with the recording. It should preserve meaning without
+   adding facts. The first CPU inference can be slower while Ollama loads the model.
+4. To test the unavailable-server path on Windows, fully quit the Ollama background
+   app from its system-tray menu. Do not run an `ollama` CLI command afterward because
+   the installed Windows application may launch again. Use the passive PowerShell check
+   `Test-NetConnection 127.0.0.1 -Port 11434 -InformationLevel Quiet`; it should return
+   `False`. Record or use **Retry local AI processing** and confirm a useful connection
+   error appears without losing the transcript. Reopen Ollama and retry successfully.
+   Running `ollama stop gemma3:4b` is not sufficient: it only unloads the model, and the
+   still-running server automatically loads it again on the next request. For a fully
+   deterministic test, temporarily set `OLLAMA_BASE_URL=http://127.0.0.1:11435` in
+   `.env.local` and restart Next.js, then restore port `11434` afterward.
+5. Run `npm run ai:eval` to inspect three repeatable semantic cases. Tests verify the
+   schema and error behavior; this evaluation is where you judge meaning and usefulness.
+
+Contract: `POST /api/process` with JSON `{ "transcript": "..." }`. Success returns
+`{ "structuredThought": { ... } }`; failures use `{ "error": "..." }`. The route
+accepts transcripts up to 10,000 characters, calls Ollama's local `/api/chat`, requests
+schema-constrained JSON, then validates the result again with Zod. Debug in order:
+browser Network tab (`/api/process`), the terminal running Next.js, Ollama status/model,
+`lib/ai/ollama.ts`, then `lib/ai/schemas.ts`.
+
 ## Your practice challenges
 
 Search for `CHALLENGE` and `TODO(you)` in the source. These are optional exercises
 on top of the working milestone; their solutions are intentionally left to you:
 
-- `VoiceRecorder.tsx`: add elapsed recording time; reset it between recordings.
 - `VoiceRecorder.tsx`: add Copy transcript with success/failure feedback.
+- `VoiceRecorder.tsx`: add Copy interpretation while keeping it distinct from raw text.
 - `tests/transcription.test.ts`: add the exactly-10-MiB acceptance test, complementing
   the existing one-byte-over rejection test. Use the mocked provider.
+- `scripts/evaluate-ai.ts`: beginner exercise—add one string to the `cases` array,
+  run the evaluation, and check whether the action preserves its stated timing.
+
+The prompt-injection request test is completed in `tests/structured-thought.test.ts`.
+It verifies request construction using a mock; it does not prove the model will always
+ignore instructions embedded in a transcript.
