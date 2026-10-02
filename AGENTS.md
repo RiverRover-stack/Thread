@@ -424,6 +424,13 @@ Tell me where I should look first if it breaks.
 Keep this concise unless I ask for a deeper explanation.
 
 
+## Practice during milestones
+
+Add a few concise `CHALLENGE` and `TODO(you)` comments in relevant source files.
+Leave these exercises for me to implement, with a hint and a verification step.
+Keep the milestone's main flow working and list the exercises in the handoff.
+Do not solve an exercise unless I ask.
+
 ## Phase Execution
 
 PROJECT_SPEC.md defines the product-level phases.

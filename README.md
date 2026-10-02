@@ -4,10 +4,10 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1, Milestone 1: the Next.js homepage captures microphone audio with the
-browser MediaRecorder API and provides local playback. TypeScript, Tailwind CSS,
-and Prisma's PostgreSQL configuration are in place. Transcription, AI interpretation,
-persistence, timeline, and detail pages are not implemented yet.
+Phase 1, Milestone 2: the Next.js homepage captures microphone audio, provides
+local playback, and sends the recording to ElevenLabs for transcription after
+stopping. TypeScript, Tailwind CSS, and Prisma's PostgreSQL configuration are in
+place. AI interpretation, persistence, timeline, and detail pages are not implemented yet.
 See PROJECT_SPEC.md for product scope and AGENTS.md for our
 collaboration rules.
 
@@ -57,6 +57,7 @@ when we implement persistence in Milestone 4.
 ## Checks
 
 ```powershell
+npm test
 npm run lint
 npm run typecheck
 npm run build
@@ -84,16 +85,22 @@ Recheck patched Prisma releases before deployment.
 - `app/globals.css`: Tailwind import and global styles.
 - `next.config.ts`: disables automatic rewriting of our user-owned `AGENTS.md`.
 - `components/capture/VoiceRecorder.tsx`: microphone permission, recording lifecycle,
-  audio Blob, local playback, errors, and resource cleanup.
+  audio Blob, local playback, transcription request/retry, and resource cleanup.
+- `app/api/transcribe/route.ts`: multipart upload validation and HTTP responses.
+- `lib/speech/index.ts`: provider-independent `transcribeAudio(audio)` entry point.
+- `lib/speech/elevenlabs.ts`: server-only ElevenLabs request and response validation.
+- `lib/speech/errors.ts`: safe error messages and HTTP status mapping.
+- `tests/transcription.test.ts`: mocked route/provider tests; never calls ElevenLabs.
 - `prisma/schema.prisma`: database provider and future data models.
 - `prisma.config.ts`: Prisma CLI configuration and environment loading.
 - `scripts/check-db.mjs`: read-only PostgreSQL connectivity diagnostic.
 - `.env.example`: required variable names without secrets.
 
-Current capture flow: microphone → MediaStream → MediaRecorder chunks → Blob →
-local object URL → audio playback. Audio stays in memory in the browser tab;
-refreshing or leaving the page loses the recording. Recording again replaces it.
-The Blob is retained in the component's `recording.blob` for the next milestone.
+Current capture flow: microphone → MediaRecorder chunks → Blob →
+`POST /api/transcribe` → `transcribeAudio` → ElevenLabs → raw transcript → UI.
+The Blob also has a local object URL for playback. Thread does not persist either
+audio or transcripts yet; refreshing or leaving loses them. Recording again
+replaces them. Audio is sent to ElevenLabs, so it is no longer browser-only.
 The database check is a separate CLI flow: `.env.local` → PostgreSQL → `SELECT 1`.
 
 ## Verify voice capture (Milestone 1)
@@ -105,7 +112,8 @@ The database check is a separate CLI flow: `.env.local` → PostgreSQL → `SELE
 4. Play the audio and confirm your sentence is audible. Expand **Recording details**
    and confirm a nonzero Blob byte count and an audio MIME type.
 5. Press **Record again**, capture a different sentence, and confirm playback is
-   replaced with the new clip. Refresh and confirm the preview disappears.
+   replaced with the new clip (wait for transcription to finish or fail first).
+   Refresh and confirm the preview disappears.
 6. Block microphone permission in the browser's site settings and retry. Confirm
    an actionable error appears. Allow permission again and confirm recording recovers.
 7. Leave or reload the page during recording and confirm the microphone is released.
@@ -119,5 +127,54 @@ audio. Object URLs are released when replaced or when the component unmounts.
 
 If the page fails, inspect the terminal running `npm run dev`. For a database
 failure, start with `npm run db:check`, the PostgreSQL service, database name, and
-local credentials. Provider configuration will be introduced with the integration
-milestones: ElevenLabs in Milestone 2 and a chosen Gemma host in Milestone 3.
+local credentials. Gemma hosting will be selected in Milestone 3.
+
+## Transcription setup and verification (Milestone 2)
+
+Set `ELEVENLABS_API_KEY` in `.env.local` using an ElevenLabs key with speech-to-text
+access, then restart the dev server. Keep it server-side; no provider SDK is needed.
+We use the documented `POST https://api.elevenlabs.io/v1/speech-to-text` endpoint
+with `model_id=scribe_v2`, automatic language detection, and audio event tags off.
+See https://elevenlabs.io/docs/api-reference/speech-to-text/convert.
+
+1. Record a short sentence, then stop. Confirm **Transcribing…** appears.
+2. Confirm the sentence appears under **USER SAID · TRANSCRIPT**, and compare it
+   with your audio. Speech recognition can make mistakes; no AI rewriting occurs here.
+3. Record another sentence and confirm it replaces the previous audio/transcript.
+4. With the key temporarily removed and the server restarted, confirm a helpful
+   setup error appears and audio playback remains available. Restore the key,
+   restart, and use **Retry transcription** if the same page is still open.
+5. Refresh and confirm neither recording nor transcript persists yet.
+
+Contract: `POST /api/transcribe`, multipart field `audio` containing a file up to
+10 MiB. Success: `{ "transcript": "..." }`. Failure: `{ "error": "..." }` with
+400 (bad upload), 413 (too large), 415 (unsupported MIME type), 422 (unreadable audio
+or no speech), 429 (provider limit), 502 (provider/network/response failure),
+503 (missing/rejected credentials), or 504 (timeout). Responses are not cached.
+Multipart overhead is bounded separately at 64 KiB; the body stream is checked
+even when Content-Length is absent. MIME checking is metadata validation, not
+proof that a file contains valid audio.
+
+The provider request times out after 60 seconds; the browser waits up to 75 seconds.
+Retry is explicit to avoid automatically repeating billable requests. Leaving the
+page aborts the browser request; a provider request already sent may still finish.
+No audio, transcript, key, or provider error body is written to application logs.
+This unauthenticated development endpoint is for the local MVP, not public deployment.
+
+`npm test` runs the route with a mocked provider using Node's test runner and `tsx`.
+It checks payload boundaries, malformed uploads, missing credentials, exact text
+preservation, malformed responses, provider errors, and timeouts. It does not prove
+real microphone capture, provider credentials, or transcription accuracy.
+
+Debug in order: browser Network tab (`/api/transcribe` status), route upload checks,
+then `lib/speech/elevenlabs.ts` and local key/account configuration.
+
+## Your practice challenges
+
+Search for `CHALLENGE` and `TODO(you)` in the source. These are optional exercises
+on top of the working milestone; their solutions are intentionally left to you:
+
+- `VoiceRecorder.tsx`: add elapsed recording time; reset it between recordings.
+- `VoiceRecorder.tsx`: add Copy transcript with success/failure feedback.
+- `tests/transcription.test.ts`: add the exactly-10-MiB acceptance test, complementing
+  the existing one-byte-over rejection test. Use the mocked provider.

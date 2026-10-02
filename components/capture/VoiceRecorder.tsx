@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Status = "idle" | "requesting" | "recording" | "stopping";
+type Status = "idle" | "requesting" | "recording" | "stopping" | "transcribing";
 type Recording = { blob: Blob; url: string };
 
 function microphoneError(error: unknown): string {
@@ -21,12 +21,12 @@ function microphoneError(error: unknown): string {
 }
 
 export default function VoiceRecorder() {
-  // CHALLENGE: Display elapsed recording time without changing the audio data.
-  // TODO(you): Reset on start; clear the timer on stop and unmount.
-  // Verify: Record twice. The second recording must start at zero.
   const [status, setStatus] = useState<Status>("idle");
   const [recording, setRecording] = useState<Recording | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  const transcriptionRef = useRef<AbortController | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -34,9 +34,20 @@ export default function VoiceRecorder() {
   const requestIdRef = useRef(0);
 
   useEffect(() => {
+    if (status !== "recording") return;
+
+    const timer = window.setInterval(() => {
+      setElapsedSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [status]);
+
+  useEffect(() => {
     return () => {
       // Invalidate permission requests that might resolve after navigation.
       requestIdRef.current += 1;
+      transcriptionRef.current?.abort();
       const recorder = recorderRef.current;
       if (recorder) {
         recorder.ondataavailable = null;
@@ -48,6 +59,52 @@ export default function VoiceRecorder() {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
+
+  async function requestTranscript(blob: Blob) {
+    if (transcriptionRef.current) return;
+    const controller = new AbortController();
+    transcriptionRef.current = controller;
+    busyRef.current = true;
+    setStatus("transcribing");
+    setError(null);
+    setTranscript(null);
+
+    try {
+      const form = new FormData();
+      const mimeType = blob.type.split(";")[0];
+      const extension = mimeType.includes("mp4") ? "m4a" : mimeType.includes("ogg") ? "ogg" : mimeType.includes("webm") ? "webm" : "audio";
+      form.append("audio", blob, `thought.${extension}`);
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(75_000)]),
+      });
+      const result: unknown = await response.json();
+      if (!response.ok) {
+        const message = result && typeof result === "object" && "error" in result && typeof result.error === "string"
+          ? result.error : "Transcription failed. Please retry.";
+        throw new Error(message);
+      }
+      if (!result || typeof result !== "object" || !("transcript" in result) || typeof result.transcript !== "string" || !result.transcript.trim()) {
+        throw new Error("The server returned an invalid transcript. Please retry.");
+      }
+      if (!controller.signal.aborted) setTranscript(result.transcript);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setError(error instanceof Error && error.name === "TimeoutError"
+          ? "Transcription took too long. Your recording is still available; please retry."
+          : error instanceof TypeError || error instanceof SyntaxError
+            ? "Could not get a valid response from Thread. Check the app is running, then retry."
+          : error instanceof Error ? error.message : "Transcription failed. Please retry.");
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        transcriptionRef.current = null;
+        busyRef.current = false;
+        setStatus("idle");
+      }
+    }
+  }
 
   async function startRecording() {
     // A ref blocks rapid repeat clicks before React updates the button.
@@ -108,14 +165,17 @@ export default function VoiceRecorder() {
         const url = URL.createObjectURL(blob);
         previewUrlRef.current = url;
         setRecording({ blob, url });
+        void requestTranscript(blob);
       };
 
       recorder.start();
+      setElapsedSeconds(0);
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = null;
       }
       setRecording(null);
+      setTranscript(null);
       setStatus("recording");
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
@@ -138,33 +198,50 @@ export default function VoiceRecorder() {
   }
 
   const statusText = {
-    idle: recording ? "Audio captured. Play it back below." : "Ready when you are.",
+    idle: transcript ? "Transcript ready. Review what you said below." : recording ? "Audio captured. Play it back below or retry transcription." : "Ready when you are.",
     requesting: "Waiting for microphone permission. Check your browser's permission prompt.",
     recording: "Recording. Speak your thought, then press Stop recording.",
     stopping: "Finishing your recording…",
+    transcribing: "Transcribing your thought…",
   }[status];
+  const elapsedTime = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
 
   return (
     <section aria-labelledby="capture-heading" className="mt-10 rounded-2xl border border-stone-300 bg-white p-6 sm:p-8">
       <h2 id="capture-heading" className="text-xl font-semibold">Capture a thought</h2>
       <p className="mt-2 text-sm leading-relaxed text-stone-600">
-        Your audio stays in this browser tab. It isn&apos;t uploaded or saved and will be lost when you leave or refresh.
+        When you stop recording, your audio is sent to ElevenLabs for transcription.
+        Thread doesn&apos;t save your audio or transcript yet; refreshing clears them.
       </p>
       <div className="mt-6">
         <button
           type="button"
           onClick={status === "recording" ? stopRecording : startRecording}
-          disabled={status === "requesting" || status === "stopping"}
+          disabled={status === "requesting" || status === "stopping" || status === "transcribing"}
           className="min-h-12 rounded-full bg-emerald-900 px-6 py-3 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800 disabled:cursor-wait disabled:opacity-60"
         >
-          {status === "recording" ? "Stop recording" : status === "requesting" ? "Requesting microphone…" : status === "stopping" ? "Finishing…" : recording ? "Record again" : "Record a thought"}
+          {status === "recording" ? "Stop recording" : status === "requesting" ? "Requesting microphone…" : status === "stopping" ? "Finishing…" : status === "transcribing" ? "Transcribing…" : recording ? "Record again" : "Record a thought"}
         </button>
       </div>
       <p role="status" className="mt-4 text-sm leading-relaxed text-stone-700">
         {status === "recording" && <span aria-hidden="true" className="mr-2 inline-block h-2 w-2 rounded-full bg-red-600" />}
-        {statusText}
+        {statusText}{(status === "recording" || status === "stopping") && <span className="ml-2 font-mono tabular-nums">{elapsedTime}</span>}
       </p>
       {error && <p role="alert" className="mt-4 text-sm leading-relaxed text-red-800">{error}</p>}
+      {recording && !transcript && status === "idle" && (
+        <button type="button" onClick={() => void requestTranscript(recording.blob)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
+          Retry transcription
+        </button>
+      )}
+      {/* CHALLENGE: Add a Copy transcript button without changing the transcript.
+          TODO(you): Use the clipboard API; show success only after it resolves.
+          Verify: Paste elsewhere and compare punctuation and line breaks. */}
+      {transcript && (
+        <section aria-labelledby="transcript-heading" className="mt-6 border-t border-stone-200 pt-6">
+          <h3 id="transcript-heading" className="text-sm font-semibold tracking-wide">USER SAID · TRANSCRIPT</h3>
+          <p className="mt-3 whitespace-pre-wrap leading-relaxed">{transcript}</p>
+        </section>
+      )}
       {recording && (
         <div className="mt-6 border-t border-stone-200 pt-6">
           <audio key={recording.url} controls src={recording.url} aria-label="Recorded thought playback" className="w-full" />
