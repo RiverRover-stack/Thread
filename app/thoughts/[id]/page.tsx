@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getThought } from "@/lib/db/thoughts";
 import ThoughtDetail from "@/components/thoughts/ThoughtDetail";
 import RetryLoading from "@/components/thoughts/RetryLoading";
+import RelatedThoughts from "@/components/thoughts/RelatedThoughts";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,7 @@ export default async function ThoughtPage({ params }: { params: Promise<{ id: st
         <Link href="/" className="font-semibold text-emerald-900 underline">Record a thought</Link>
       </nav>
       <ThoughtDetail thought={thought} />
+      <RelatedThoughts key={thought.id} thoughtId={thought.id} />
     </main>
   );
 }

@@ -27,7 +27,8 @@
     "embeddings:backfill": "node --conditions=react-server --import tsx scripts/backfill-embeddings.ts",
     "embeddings:verify": "node --conditions=react-server --import tsx scripts/verify-embeddings.ts",
     "related:verify": "node --conditions=react-server --import tsx scripts/verify-related-thoughts.ts",
-    "memory:eval": "node --conditions=react-server --import tsx scripts/evaluate-memory.ts"
+    "memory:eval": "node --conditions=react-server --import tsx scripts/evaluate-memory.ts",
+    "memory:detail:verify": "node --conditions=react-server --import tsx scripts/verify-memory-detail.ts"
   },
   "dependencies": {
     "@next/env": "16.3.8",
