@@ -7,4 +7,16 @@ datasource db {
   provider = "postgresql"
 }
 
-// The Thought model and first migration belong to Milestone 4.
+model Thought {
+  id                String   @id @db.Uuid
+  rawTranscript     String
+  title             String
+  summary           String
+  categories        String[]
+  actionable        Boolean
+  possibleAction    String?
+  questionToExplore String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([createdAt])
+}

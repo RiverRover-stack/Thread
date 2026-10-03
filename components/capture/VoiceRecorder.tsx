@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { StructuredThought } from "@/lib/ai/schemas";
 
-type Status = "idle" | "requesting" | "recording" | "stopping" | "transcribing" | "structuring";
+type Status = "idle" | "requesting" | "recording" | "stopping" | "transcribing" | "structuring" | "saving";
 type Recording = { blob: Blob; url: string };
 
 function isStructuredThought(value: unknown): value is StructuredThought {
@@ -40,6 +40,9 @@ export default function VoiceRecorder() {
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [structuredThought, setStructuredThought] = useState<StructuredThought | null>(null);
+  const [savedThought, setSavedThought] = useState<{ id: string; createdAt: string } | null>(null);
+  const thoughtIdRef = useRef<string | null>(null);
+  const savingRef = useRef<AbortController | null>(null);
   const transcriptionRef = useRef<AbortController | null>(null);
   const structuringRef = useRef<AbortController | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -64,6 +67,7 @@ export default function VoiceRecorder() {
       requestIdRef.current += 1;
       transcriptionRef.current?.abort();
       structuringRef.current?.abort();
+      savingRef.current?.abort();
       const recorder = recorderRef.current;
       if (recorder) {
         recorder.ondataavailable = null;
@@ -75,6 +79,39 @@ export default function VoiceRecorder() {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
+
+  async function saveThought(rawTranscript: string, interpretation: StructuredThought) {
+    if (savingRef.current || !thoughtIdRef.current) return;
+    const controller = new AbortController();
+    savingRef.current = controller;
+    busyRef.current = true;
+    setStatus("saving");
+    setError(null);
+    try {
+      const response = await fetch("/api/thoughts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: thoughtIdRef.current, rawTranscript, structuredThought: interpretation }),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(typeof result?.error === "string" ? result.error : "Saving failed. Please retry saving.");
+      if (result?.thought?.id !== thoughtIdRef.current || typeof result?.thought?.createdAt !== "string") {
+        throw new Error("The server returned an invalid save confirmation. Please retry saving.");
+      }
+      if (!controller.signal.aborted) setSavedThought({ id: result.thought.id, createdAt: result.thought.createdAt });
+    } catch (error) {
+      if (!controller.signal.aborted) setError(error instanceof Error && error.name === "TimeoutError"
+        ? "Save confirmation took too long. Retry saving; this will not create a duplicate."
+        : error instanceof Error ? error.message : "Saving failed. Please retry saving.");
+    } finally {
+      if (!controller.signal.aborted) {
+        savingRef.current = null;
+        busyRef.current = false;
+        setStatus("idle");
+      }
+    }
+  }
 
   async function requestStructuredThought(rawTranscript: string) {
     if (structuringRef.current) return;
@@ -101,7 +138,10 @@ export default function VoiceRecorder() {
       if (!result || typeof result !== "object" || !("structuredThought" in result) || !isStructuredThought(result.structuredThought)) {
         throw new Error("The server returned an invalid structured thought. Please retry.");
       }
-      if (!controller.signal.aborted) setStructuredThought(result.structuredThought);
+      if (!controller.signal.aborted) {
+        setStructuredThought(result.structuredThought);
+        await saveThought(rawTranscript, result.structuredThought);
+      }
     } catch (error) {
       if (!controller.signal.aborted) {
         setError(error instanceof Error && error.name === "TimeoutError"
@@ -234,6 +274,8 @@ export default function VoiceRecorder() {
       };
 
       recorder.start();
+      thoughtIdRef.current = crypto.randomUUID();
+      setSavedThought(null);
       setElapsedSeconds(0);
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
@@ -264,12 +306,13 @@ export default function VoiceRecorder() {
   }
 
   const statusText = {
-    idle: structuredThought ? "Thought structured locally. Review both versions below." : transcript ? "Transcript ready. Retry local AI processing below." : recording ? "Audio captured. Play it back below or retry transcription." : "Ready when you are.",
+    idle: savedThought ? "Thought saved to your database." : structuredThought ? "Thought structured, but not saved. Retry saving below." : transcript ? "Transcript ready. Retry local AI processing below." : recording ? "Audio captured. Play it back below or retry transcription." : "Ready when you are.",
     requesting: "Waiting for microphone permission. Check your browser's permission prompt.",
     recording: "Recording. Speak your thought, then press Stop recording.",
     stopping: "Finishing your recording…",
     transcribing: "Transcribing your thought…",
     structuring: "Gemma is structuring your thought locally. The first run can take longer…",
+    saving: "Saving your thought…",
   }[status];
   const elapsedTime = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
 
@@ -278,16 +321,16 @@ export default function VoiceRecorder() {
       <h2 id="capture-heading" className="text-xl font-semibold">Capture a thought</h2>
       <p className="mt-2 text-sm leading-relaxed text-stone-600">
         When you stop recording, audio is sent to ElevenLabs for transcription, then Gemma structures the transcript locally through Ollama.
-        Thread doesn&apos;t save your audio or transcript yet; refreshing clears them.
+        Your transcript and interpretation are saved to PostgreSQL. Audio playback is temporary and clears when you refresh.
       </p>
       <div className="mt-6">
         <button
           type="button"
           onClick={status === "recording" ? stopRecording : startRecording}
-          disabled={status === "requesting" || status === "stopping" || status === "transcribing" || status === "structuring"}
+          disabled={status === "requesting" || status === "stopping" || status === "transcribing" || status === "structuring" || status === "saving"}
           className="min-h-12 rounded-full bg-emerald-900 px-6 py-3 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800 disabled:cursor-wait disabled:opacity-60"
         >
-          {status === "recording" ? "Stop recording" : status === "requesting" ? "Requesting microphone…" : status === "stopping" ? "Finishing…" : status === "transcribing" ? "Transcribing…" : status === "structuring" ? "Structuring locally…" : recording ? "Record again" : "Record a thought"}
+          {status === "recording" ? "Stop recording" : status === "requesting" ? "Requesting microphone…" : status === "stopping" ? "Finishing…" : status === "transcribing" ? "Transcribing…" : status === "structuring" ? "Structuring locally…" : status === "saving" ? "Saving…" : recording ? "Record again" : "Record a thought"}
         </button>
       </div>
       <p role="status" className="mt-4 text-sm leading-relaxed text-stone-700">
@@ -295,6 +338,12 @@ export default function VoiceRecorder() {
         {statusText}{(status === "recording" || status === "stopping") && <span className="ml-2 font-mono tabular-nums">{elapsedTime}</span>}
       </p>
       {error && <p role="alert" className="mt-4 text-sm leading-relaxed text-red-800">{error}</p>}
+      {savedThought && <p className="mt-3 text-sm text-emerald-900">Saved at {new Date(savedThought.createdAt).toLocaleString()}</p>}
+      {transcript && structuredThought && !savedThought && status === "idle" && (
+        <button type="button" onClick={() => void saveThought(transcript, structuredThought)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
+          Retry saving
+        </button>
+      )}
       {recording && !transcript && status === "idle" && (
         <button type="button" onClick={() => void requestTranscript(recording.blob)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
           Retry transcription

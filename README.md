@@ -4,11 +4,11 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1, Milestone 3: the Next.js homepage captures microphone audio, provides
+Phase 1, Milestone 4: the Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
 stopping. It then sends the raw transcript to a local Gemma model through Ollama
-and validates the structured thought with Zod. Persistence, timeline, and detail
-pages are not implemented yet.
+and validates the structured thought with Zod. It automatically saves the original
+transcript and interpretation to PostgreSQL. Timeline and detail pages are not implemented yet.
 See PROJECT_SPEC.md for product scope and AGENTS.md for our
 collaboration rules.
 
@@ -51,9 +51,10 @@ npm run db:check
 data. An accepting PostgreSQL port does not prove that credentials or the database
 name are correct. Missing credentials cause an explicit setup message.
 
-There are deliberately no models or migrations yet. We will add the Thought
-model, generate the Prisma client, and introduce the shared server-side client
-when we implement persistence in Milestone 4.
+The `Thought` model and initial migration are now included. After configuring
+`DATABASE_URL`, run `npm run db:check`, `npm run db:migrate`, and `npm run db:generate`.
+`db:migrate` applies committed migrations; it does not reset existing data.
+`build` and `typecheck` also generate the client, whose files are ignored by Git.
 
 ## Checks
 
@@ -96,6 +97,11 @@ Recheck patched Prisma releases before deployment.
 - `lib/ai/index.ts`: provider-independent `structureThought(transcript)` entry point.
 - `lib/ai/ollama.ts`: local Ollama request, prompt, response parsing, and safe errors.
 - `lib/ai/schemas.ts`: Zod contract and cross-field rules for structured thoughts.
+- `lib/db/client.ts`: lazily creates and reuses Prisma's PostgreSQL connection pool.
+- `app/api/thoughts/route.ts`: validates and saves both versions with retry-safe IDs.
+- `prisma/migrations/`: versioned SQL that creates the actual database table.
+- `tests/persistence.test.ts`: mocked database tests for validation and retry behavior.
+- `scripts/verify-persistence.ts`: real database creation/read check across separate processes.
 - `tests/structured-thought.test.ts`: mocked route/Ollama contract and failure tests.
 - `scripts/evaluate-ai.ts`: repeatable semantic quality cases against the real local model.
 - `prisma/schema.prisma`: database provider and future data models.
@@ -105,10 +111,10 @@ Recheck patched Prisma releases before deployment.
 
 Current capture flow: microphone → MediaRecorder chunks → Blob →
 `POST /api/transcribe` → ElevenLabs → raw transcript → `POST /api/process` →
-Ollama/Gemma → Zod-validated structured thought → UI.
-The Blob also has a local object URL for playback. Thread does not persist either
-audio or transcripts yet; refreshing or leaving loses them. Recording again
-replaces them. Audio is sent to ElevenLabs, so it is no longer browser-only.
+Ollama/Gemma → Zod-validated structured thought → `POST /api/thoughts` → PostgreSQL → save confirmation.
+The Blob also has a local object URL for playback. Audio and the current screen's
+preview are temporary; saved transcripts and interpretations remain in PostgreSQL.
+Recording again replaces the preview. Audio is sent to ElevenLabs.
 The database check is a separate CLI flow: `.env.local` → PostgreSQL → `SELECT 1`.
 
 ## Verify voice capture (Milestone 1)
@@ -226,3 +232,44 @@ on top of the working milestone; their solutions are intentionally left to you:
 The prompt-injection request test is completed in `tests/structured-thought.test.ts`.
 It verifies request construction using a mock; it does not prove the model will always
 ignore instructions embedded in a transcript.
+
+## Persistence (Milestone 4)
+
+Create a database named `thread` using pgAdmin and your existing PostgreSQL account.
+Put its connection URL in `.env.local`; do not commit or share your password.
+PostgreSQL must be running, and migrations must be applied before saving can work.
+
+```powershell
+npm run db:check
+npm run db:migrate
+npm run db:generate
+npm run dev
+```
+
+`POST /api/thoughts` accepts `{ id, rawTranscript, structuredThought }`. The ID is a
+UUID generated once per recording. The server validates the payload again with Zod
+and uses a Prisma `upsert`: insert a new row, or return the existing row with no
+updates. This prevents duplicate saves when a response is lost and the user retries.
+An existing ID with different content returns 409 rather than replacing the original.
+`createdAt` comes from PostgreSQL; clients cannot set it. Successful responses contain
+`{ thought }`, including the stored timestamp. Failures leave the capture preview
+available and offer **Retry saving**, without another ElevenLabs or Gemma call.
+
+To verify persistence without waiting for speech or inference:
+
+```powershell
+npm run db:verify
+# Use the ID printed above in a new terminal/process:
+npm run db:verify -- THOUGHT_ID
+```
+
+The first command intentionally inserts one synthetic verification thought. The
+second only reads it. You can also copy a real thought ID from the browser Network
+tab's `/api/thoughts` response and read that ID after refreshing/restarting Thread.
+The capture preview clears on refresh, but the row remains. Saved thoughts will
+appear in the timeline in Milestone 5.
+
+Debug persistence in order: `/api/thoughts` response in the Network tab, `npm run
+db:check`, `npm run db:migrate`, then the save route and `lib/db/client.ts`. The
+mocked tests do not establish real database connectivity; the CLI verification does.
+No new practice challenges are assigned for this milestone.
