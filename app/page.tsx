@@ -1,4 +1,10 @@
+// Home Page
+
 import VoiceRecorder from "@/components/capture/VoiceRecorder";
+import ThoughtTimeline from "@/components/thoughts/ThoughtTimeline";
+import Link from "next/link";
+
+export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
@@ -11,6 +17,8 @@ export default function Home() {
         A place for the ideas that arrive before you have the words in order.
       </p>
       <VoiceRecorder />
+      <div className="mt-6"><Link href="/thoughts" className="font-semibold text-emerald-900 underline">View your timeline</Link></div>
+      <ThoughtTimeline />
     </main>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { StructuredThought } from "@/lib/ai/schemas";
 
 type Status = "idle" | "requesting" | "recording" | "stopping" | "transcribing" | "structuring" | "saving";
@@ -34,6 +35,7 @@ function microphoneError(error: unknown): string {
 }
 
 export default function VoiceRecorder() {
+  const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [recording, setRecording] = useState<Recording | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -99,7 +101,10 @@ export default function VoiceRecorder() {
       if (result?.thought?.id !== thoughtIdRef.current || typeof result?.thought?.createdAt !== "string") {
         throw new Error("The server returned an invalid save confirmation. Please retry saving.");
       }
-      if (!controller.signal.aborted) setSavedThought({ id: result.thought.id, createdAt: result.thought.createdAt });
+      if (!controller.signal.aborted) {
+        setSavedThought({ id: result.thought.id, createdAt: result.thought.createdAt });
+        router.refresh();
+      }
     } catch (error) {
       if (!controller.signal.aborted) setError(error instanceof Error && error.name === "TimeoutError"
         ? "Save confirmation took too long. Retry saving; this will not create a duplicate."

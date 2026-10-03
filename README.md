@@ -4,11 +4,12 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1, Milestone 4: the Next.js homepage captures microphone audio, provides
+Phase 1, Milestone 5: the Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
 stopping. It then sends the raw transcript to a local Gemma model through Ollama
 and validates the structured thought with Zod. It automatically saves the original
-transcript and interpretation to PostgreSQL. Timeline and detail pages are not implemented yet.
+transcript and interpretation to PostgreSQL. The homepage and `/thoughts` display
+saved thoughts newest first. Thought detail pages are not implemented yet.
 See PROJECT_SPEC.md for product scope and AGENTS.md for our
 collaboration rules.
 
@@ -98,6 +99,10 @@ Recheck patched Prisma releases before deployment.
 - `lib/ai/ollama.ts`: local Ollama request, prompt, response parsing, and safe errors.
 - `lib/ai/schemas.ts`: Zod contract and cross-field rules for structured thoughts.
 - `lib/db/client.ts`: lazily creates and reuses Prisma's PostgreSQL connection pool.
+- `lib/db/thoughts.ts`: reads only the timeline fields in deterministic newest-first order.
+- `components/thoughts/ThoughtTimeline.tsx`: renders saved thoughts, empty state, and database failure feedback.
+- `app/thoughts/page.tsx`: standalone timeline with a link back to capture.
+- `app/thoughts/loading.tsx`: loading feedback during timeline navigation.
 - `app/api/thoughts/route.ts`: validates and saves both versions with retry-safe IDs.
 - `prisma/migrations/`: versioned SQL that creates the actual database table.
 - `tests/persistence.test.ts`: mocked database tests for validation and retry behavior.
@@ -266,10 +271,28 @@ npm run db:verify -- THOUGHT_ID
 The first command intentionally inserts one synthetic verification thought. The
 second only reads it. You can also copy a real thought ID from the browser Network
 tab's `/api/thoughts` response and read that ID after refreshing/restarting Thread.
-The capture preview clears on refresh, but the row remains. Saved thoughts will
-appear in the timeline in Milestone 5.
+The capture preview clears on refresh, but the row remains and appears in the timeline.
 
 Debug persistence in order: `/api/thoughts` response in the Network tab, `npm run
 db:check`, `npm run db:migrate`, then the save route and `lib/db/client.ts`. The
 mocked tests do not establish real database connectivity; the CLI verification does.
 No new practice challenges are assigned for this milestone.
+
+## Timeline (Milestone 5)
+
+The homepage and `/thoughts` query PostgreSQL using a server component. No separate
+GET API is needed: the server can use Prisma directly. Both pages render on each
+request rather than freezing the list at build time. After saving, the recorder calls
+`router.refresh()` to request fresh server-rendered content while preserving its
+browser state. The query orders by `createdAt` descending, then ID descending to
+resolve identical timestamps consistently. Card timestamps explicitly use UTC.
+
+Verify: create several thoughts, confirm newest first on both pages, refresh, and
+restart Next.js. Saved thoughts should remain visible. An empty database shows a
+helpful empty state; an unavailable database shows an error with a retry link.
+The cards are display-only until thought detail navigation is added in Milestone 6.
+Debug list problems in `lib/db/thoughts.ts`, then `ThoughtTimeline.tsx` and the
+Next.js terminal. If saving succeeds but the list stays stale, check `router.refresh()`.
+With Thread running on localhost:3000, `npm run timeline:verify` creates three
+temporary fixtures, checks query and rendered card order on both pages, and removes
+only those fixtures in a `finally` block.
