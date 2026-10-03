@@ -1,6 +1,6 @@
-import type { Thought } from "@/generated/prisma/client";
+import type { getThought } from "@/lib/db/thoughts";
 
-export default function ThoughtDetail({ thought }: { thought: Thought }) {
+export default function ThoughtDetail({ thought }: { thought: NonNullable<Awaited<ReturnType<typeof getThought>>> }) {
   return (
     <article className="mt-8">
       <p className="text-xs font-semibold tracking-widest text-stone-500">AI-GENERATED TITLE</p>

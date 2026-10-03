@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test, mock } from "node:test";
 import { POST } from "../app/api/thoughts/route";
 import type { PrismaClient } from "../generated/prisma/client";
+import { thoughtContentSelect } from "../lib/db/thoughts";
 
 const databaseGlobal = globalThis as unknown as { threadPrisma?: PrismaClient };
 const originalDatabase = databaseGlobal.threadPrisma;
@@ -41,6 +42,7 @@ test("saves the exact raw transcript and retries without overwriting", async () 
   const upsert = mockDatabase(async (query: unknown) => {
     assert.deepEqual(query, {
       where: { id: payload.id }, create: { id: payload.id, rawTranscript: payload.rawTranscript, ...payload.structuredThought }, update: {},
+      select: thoughtContentSelect,
     });
     return row;
   });

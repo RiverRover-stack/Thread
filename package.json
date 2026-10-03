@@ -23,7 +23,9 @@
     "memory:check": "node scripts/check-semantic-memory.mjs",
     "memory:check:db": "node scripts/check-semantic-memory.mjs --database",
     "memory:check:embedding": "node scripts/check-semantic-memory.mjs --embedding",
-    "embeddings:eval": "node --conditions=react-server --import tsx scripts/evaluate-embeddings.ts"
+    "embeddings:eval": "node --conditions=react-server --import tsx scripts/evaluate-embeddings.ts",
+    "embeddings:backfill": "node --conditions=react-server --import tsx scripts/backfill-embeddings.ts",
+    "embeddings:verify": "node --conditions=react-server --import tsx scripts/verify-embeddings.ts"
   },
   "dependencies": {
     "@next/env": "16.3.8",

@@ -44,6 +44,8 @@ export default function VoiceRecorder() {
   const [transcript, setTranscript] = useState<string | null>(null);
   const [structuredThought, setStructuredThought] = useState<StructuredThought | null>(null);
   const [savedThought, setSavedThought] = useState<{ id: string; createdAt: string } | null>(null);
+  const [indexing, setIndexing] = useState<{ id: string; status: "loading" | "ready" | "error" } | null>(null);
+  const indexingRef = useRef<AbortController | null>(null);
   const thoughtIdRef = useRef<string | null>(null);
   const savingRef = useRef<AbortController | null>(null);
   const transcriptionRef = useRef<AbortController | null>(null);
@@ -71,6 +73,7 @@ export default function VoiceRecorder() {
       transcriptionRef.current?.abort();
       structuringRef.current?.abort();
       savingRef.current?.abort();
+      indexingRef.current?.abort();
       const recorder = recorderRef.current;
       if (recorder) {
         recorder.ondataavailable = null;
@@ -82,6 +85,25 @@ export default function VoiceRecorder() {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
+
+  async function requestIndexing(id: string) {
+    indexingRef.current?.abort();
+    const controller = new AbortController();
+    indexingRef.current = controller;
+    setIndexing({ id, status: "loading" });
+    try {
+      const response = await fetch(`/api/thoughts/${id}/embedding`, {
+        method: "POST", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(300_000)]),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.id !== id || result?.indexed !== true) throw new Error("Indexing failed");
+      if (!controller.signal.aborted) setIndexing({ id, status: "ready" });
+    } catch {
+      if (!controller.signal.aborted) setIndexing({ id, status: "error" });
+    } finally {
+      if (indexingRef.current === controller) indexingRef.current = null;
+    }
+  }
 
   async function saveThought(rawTranscript: string, interpretation: StructuredThought) {
     if (savingRef.current || !thoughtIdRef.current) return;
@@ -105,6 +127,7 @@ export default function VoiceRecorder() {
       if (!controller.signal.aborted) {
         setSavedThought({ id: result.thought.id, createdAt: result.thought.createdAt });
         router.refresh();
+        void requestIndexing(result.thought.id);
       }
     } catch (error) {
       if (!controller.signal.aborted) setError(error instanceof Error && error.name === "TimeoutError"
@@ -280,6 +303,8 @@ export default function VoiceRecorder() {
       };
 
       recorder.start();
+      indexingRef.current?.abort();
+      setIndexing(null);
       thoughtIdRef.current = crypto.randomUUID();
       setSavedThought(null);
       setElapsedSeconds(0);
@@ -349,6 +374,16 @@ export default function VoiceRecorder() {
           Saved at {new Date(savedThought.createdAt).toLocaleString()}
           {" · "}<Link href={`/thoughts/${savedThought.id}`} className="font-semibold underline">Open saved thought</Link>
         </p>
+      )}
+      {savedThought && indexing?.id === savedThought.id && (
+        <div className="mt-3 text-sm text-stone-600">
+          <p role={indexing.status === "error" ? "alert" : "status"}>
+            {indexing.status === "loading" ? "Preparing semantic memory. You can record another thought."
+              : indexing.status === "ready" ? "Ready for semantic search."
+                : "Your thought is saved, but semantic memory could not be prepared. Retry now or open the saved thought later."}
+          </p>
+          {indexing.status === "error" && <button type="button" onClick={() => void requestIndexing(savedThought.id)} className="mt-2 font-semibold text-emerald-900 underline">Retry semantic memory</button>}
+        </div>
       )}
       {transcript && structuredThought && !savedThought && status === "idle" && (
         <button type="button" onClick={() => void saveThought(transcript, structuredThought)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">

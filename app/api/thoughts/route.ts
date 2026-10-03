@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { structuredThoughtSchema } from "@/lib/ai/schemas";
 import { getDatabase } from "@/lib/db/client";
+import { thoughtContentSelect } from "@/lib/db/thoughts";
 
 export const runtime = "nodejs";
 const saveThoughtSchema = z.object({
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       where: { id },
       create: { id, rawTranscript, ...structuredThought },
       update: {},
+      select: thoughtContentSelect,
     });
     if (thought.rawTranscript !== rawTranscript
       || Object.entries(structuredThought).some(([key, value]) =>

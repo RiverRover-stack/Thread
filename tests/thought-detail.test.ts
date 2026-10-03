@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
 import type { PrismaClient } from "../generated/prisma/client";
-import { getThought } from "../lib/db/thoughts";
+import { getThought, thoughtContentSelect } from "../lib/db/thoughts";
 
 const databaseGlobal = globalThis as unknown as { threadPrisma?: PrismaClient };
 const originalDatabase = databaseGlobal.threadPrisma;
@@ -22,7 +22,7 @@ test("invalid detail IDs are rejected without querying PostgreSQL", async () => 
 test("missing thoughts return null while database failures propagate", async () => {
   const id = "bf375e93-6ff1-4cba-bcf1-574465e949ea";
   const lookup = mock.fn(async (query: unknown) => {
-    assert.deepEqual(query, { where: { id } });
+    assert.deepEqual(query, { where: { id }, select: thoughtContentSelect });
     return null;
   });
   databaseGlobal.threadPrisma = { thought: { findUnique: lookup } } as unknown as PrismaClient;

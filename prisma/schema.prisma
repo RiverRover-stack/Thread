@@ -17,6 +17,9 @@ model Thought {
   possibleAction    String?
   questionToExplore String?
   createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  embedding         Unsupported("vector(768)")?
+  embeddingModel    String?
+  embeddingVersion  Int?
 
   @@index([createdAt])
 }

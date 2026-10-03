@@ -1,5 +1,6 @@
 import "server-only";
 import { EmbeddingError } from "./errors";
+import { embeddingModelName } from "./config";
 import { EMBEDDING_DIMENSIONS, embeddingInputSchema, embeddingResponseSchema } from "./schemas";
 
 function isTimeout(error: unknown) {
@@ -11,7 +12,7 @@ export async function embedWithOllama(text: string): Promise<number[]> {
     throw new EmbeddingError("Provide nonempty text to embed.", 400);
   }
   const baseUrl = (process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434").replace(/\/$/, "");
-  const model = process.env.OLLAMA_EMBEDDING_MODEL?.trim() || "embeddinggemma:300m";
+  const model = embeddingModelName();
 
   try {
     const response = await fetch(`${baseUrl}/api/embed`, {
