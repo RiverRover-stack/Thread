@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { indexingResponseSchema, relatedThoughtsResponseSchema, type RelatedThoughtCard } from "@/lib/embeddings/response-schemas";
+import ThoughtConnection from "./ThoughtConnection";
 
 type State = { kind: "indexing" | "retrieving" }
   | { kind: "ready"; thoughts: RelatedThoughtCard[] }
@@ -54,6 +55,7 @@ export default function RelatedThoughts({ thoughtId }: { thoughtId: string }) {
   }, [thoughtId, attempt]);
 
   return (
+    <>
     <section aria-labelledby="related-heading" className="mt-8 rounded-xl border border-stone-300 bg-white p-5 sm:p-6">
       <h2 id="related-heading" className="text-xl font-semibold">Related thoughts</h2>
       <p className="mt-2 text-sm text-stone-600">Earlier thoughts with similar meaning.</p>
@@ -79,5 +81,7 @@ export default function RelatedThoughts({ thoughtId }: { thoughtId: string }) {
           </li>)}
         </ul>)}
     </section>
+    {state.kind === "ready" && state.thoughts.length > 0 && <ThoughtConnection key={thoughtId} thoughtId={thoughtId} />}
+    </>
   );
 }
