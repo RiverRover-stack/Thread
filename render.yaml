@@ -1,0 +1,29 @@
+# Deployment preparation only. Resolve inference hosting and access before publishing.
+# This creates only the Next.js service; choose the database separately.
+services:
+  - type: web
+    name: thread
+    runtime: node
+    plan: free
+    autoDeployTrigger: off
+    buildCommand: npm ci --include=dev && npm run build
+    # Free services have no pre-deploy hook. Stop startup if migrations fail.
+    startCommand: npm run db:migrate && npm start -- --hostname 0.0.0.0
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22.13.0"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: OLLAMA_BASE_URL
+        sync: false
+      - key: OLLAMA_MODEL
+        value: gemma3:4b
+      - key: OLLAMA_EMBEDDING_MODEL
+        value: embeddinggemma:300m
+      - key: RELATED_THOUGHTS_MIN_SIMILARITY
+        value: "0.70"

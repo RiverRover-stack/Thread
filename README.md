@@ -23,6 +23,10 @@ For a diagram-led implementation walkthrough, see
 
 ## Local setup
 
+Phase 5 deployment preparation is documented in [DEPLOYMENT.md](DEPLOYMENT.md).
+The root `render.yaml` defines the web service; `/api/health` checks HTTP liveness.
+Production inference hosting and access restrictions still need to be decided.
+
 Use Node.js 22.12+ on the 22.x line, or Node.js 24+ (matching package.json).
 
 ```powershell
