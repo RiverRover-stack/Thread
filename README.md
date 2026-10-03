@@ -4,10 +4,10 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1 is complete. Phase 2, Milestone 3 adds transcript chunking and aggregation
-to the validated local embedding adapter
-alongside semantic-memory readiness checks; vector indexing and related thoughts
-come in later milestones. The Next.js homepage captures microphone audio, provides
+Phase 2 is complete: original transcripts are embedded locally with EmbeddingGemma,
+stored in PostgreSQL using pgvector, and searched for relevant earlier thoughts.
+The detail page prepares missing embeddings and displays related thought cards.
+The Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
 stopping. It then sends the raw transcript to a local Gemma model through Ollama
 and validates the structured thought with Zod. It automatically saves the original
@@ -16,6 +16,10 @@ saved thoughts newest first. Each title opens a saved detail page with the origi
 transcript clearly separated from the AI interpretation.
 See PROJECT_SPEC.md for product scope and AGENTS.md for our
 collaboration rules.
+
+For a diagram-led implementation walkthrough, see
+[Phase 2 visual handoff](docs/PHASE_2_HANDOFF.md) or its
+[HTML reading copy](docs/PHASE_2_HANDOFF.html).
 
 ## Local setup
 
@@ -503,3 +507,135 @@ Data flow: raw transcript → bounded chunks → local embeddings → coordinate
 failures still start in `lib/embeddings/ollama.ts`. Your optional exercise is to add
 one multilingual fixture to the existing test `cases` array, following its
 `CHALLENGE` / `TODO(you)` comments, then run `npm test`.
+
+## Vector persistence and indexing (Phase 2, Milestone 4)
+
+The additive migration `20261003010000_add_thought_embedding` enables pgvector and
+adds nullable `embedding vector(768)`, `embeddingModel`, and `embeddingVersion`
+columns. Existing thought content is retained; a database constraint keeps the
+vector and metadata either all present or all absent. Prisma represents the vector
+as `Unsupported`, so parameterized SQL in `lib/db/embeddings.ts` handles it. The
+ordinary save/detail projections explicitly preserve the original public fields.
+
+`lib/embeddings/index-thought.ts` coordinates indexing: saved ID → stored transcript
+→ `embedTranscript` → vector write. `POST /api/thoughts/[id]/embedding` accepts the
+ID in the URL and ignores client content; it returns `{ id, indexed: true, reused }`.
+Invalid/missing IDs return 404. Compatible model/version metadata reuses the vector
+without inference. Concurrent requests may both infer, but only the first writes
+a compatible vector. No transcript or interpretation is overwritten, and vectors
+never appear in save/indexing responses. A failed request keeps the saved row intact.
+
+After save confirmation, `VoiceRecorder.tsx` sends a separate indexing request and
+keeps recording available. Indexing has separate status and retry feedback. Starting
+another recording or leaving aborts the browser request; inference already running
+on the server may still finish. Interrupted indexing can be resumed by opening the
+saved detail or running backfill. Browser indexing waits up to five minutes; very
+long/cold inference may require the CLI backfill instead.
+
+```powershell
+npm run db:migrate
+npm run db:generate
+npm run embeddings:verify
+npm run embeddings:backfill
+```
+
+The persistence verifier indexes one temporary fixture, retries, reads from a
+separate process, and removes only its fixture. Backfill intentionally adds vectors
+to existing saved thoughts, scans bounded pages sequentially, skips compatible
+records, reports counts only, and exits unsuccessfully if any indexing fails.
+Rerun after fixing Ollama or database configuration to resume; completed vectors
+are not regenerated. Changing the model tag or recipe version requires backfill.
+Replacing model weights under the same tag also requires a recipe-version bump
+before backfill, since metadata identifies the configured tag rather than a digest.
+
+Debug in order: indexing response, `memory:check`, migration status, database helpers,
+then `index-thought.ts` and the embedding adapter. The optional exercise in
+`tests/embedding-persistence.test.ts` adds another invalid-ID case.
+
+## Semantic retrieval (Phase 2, Milestone 5)
+
+`getRelatedThoughts(id)` in `lib/db/thoughts.ts` runs exact cosine search in PostgreSQL.
+Cosine similarity is `1 - cosine distance`: higher scores mean more similar vector
+directions. It excludes self, equal/later timestamps, absent vectors, and different
+model/recipe metadata. It returns at most five results, ordered by similarity, then
+creation time descending and ID ascending to resolve ties. No approximate index,
+connection generation, or history upload to Gemma is involved.
+
+`GET /api/thoughts/[id]/related` returns `{ relatedThoughts: [{ id, title, summary,
+createdAt, similarity }] }` without vectors or raw transcripts. It performs no
+indexing writes. Missing IDs return 404, unprepared/incompatible current vectors
+return 409, and retrieval/configuration failures return safe errors. Empty matches
+are successful responses, distinct from failures.
+
+`RELATED_THOUGHTS_MIN_SIMILARITY` defaults to `0.70` and accepts finite numbers from
+0 to 1. It is a tuning parameter, not a probability or confidence percentage.
+Model choice and thought content affect useful thresholds. Restart Next.js after
+changing environment configuration.
+
+```powershell
+npm run related:verify
+npm run memory:eval
+```
+
+The first command uses controlled vectors to verify real SQL ranking, limits,
+thresholds and exclusions. The second indexes synthetic paraphrase, unrelated and
+long-transcript examples using the real model, then verifies retrieval. Both remove
+only their temporary fixtures. With the current model/default threshold the checked
+paraphrase scored about 0.748 and long transcript about 0.730; the unrelated thought
+was excluded. This is a small quality check, not broad calibration.
+
+Debug the GET response, configured threshold, indexing metadata and SQL in
+`getRelatedThoughts`. Practice: add a malformed configuration example in
+`tests/related-thoughts.test.ts` as described by its comments.
+
+## Related thought detail (Phase 2, Milestone 6)
+
+`app/thoughts/[id]/page.tsx` still loads the original thought on the server and
+mounts `components/thoughts/RelatedThoughts.tsx` as an independent client section.
+The section prepares the current embedding with POST, then reads matches with GET.
+Compatible vectors are reused. The original transcript and interpretation remain
+readable during loading and failure. Related cards link to older detail pages and
+show title, summary and UTC timestamps. Similarity numbers remain internal.
+
+The section distinguishes preparation, retrieval, no matches, preparation failure
+and retrieval failure. Its retry repeats POST → GET safely. Leaving or changing
+thoughts aborts requests and guards against late responses. The section is keyed
+by thought ID so another thought begins with fresh state. Responses are validated
+with the shared Zod schemas in `lib/embeddings/response-schemas.ts` before rendering.
+
+```powershell
+npm run dev
+# In another terminal, with Thread on localhost:3000:
+npm run memory:detail:verify
+npm run timeline:verify
+npm run detail:verify
+npm test
+npm run lint
+npm run typecheck
+npm run build
+```
+
+The memory detail verifier creates temporary older/newer thoughts, checks the real
+detail and indexing/retrieval endpoints, and removes only those fixtures. Browser
+verification additionally checks rendered cards, link navigation, the empty state,
+missing-model feedback and retry recovery after restoring the model. An unavailable
+database is also covered by mocked route tests; no database service is stopped.
+Live microphone capture and ElevenLabs accuracy remain manual checks from Phase 1.
+
+Manual acceptance: capture related thoughts in sequence, wait for indexing or use
+backfill, open the newer thought and follow an earlier card. Refresh its direct URL.
+Check an unrelated thought shows no matches. On embedding failure, verify USER SAID
+and AI INTERPRETED remain readable; restore Ollama and retry the related section.
+
+Debug in order: browser Network tab (POST embedding, then GET related), the related
+component, indexing coordinator, and retrieval SQL. Practice: add seconds to the
+related card's existing `toLocaleString` options, following the in-place hints.
+
+### Commit organization
+
+The remaining implementation is saved in separate milestone commits:
+storage/migration/indexing/capture and persistence tests (4),
+retrieval/query/configuration and semantic verification (5), then client cards,
+shared response validation and detail verification (6). Shared implementation
+files were staged by milestone. The visual handoff and setup documentation are
+saved separately. Connection generation remains outside semantic memory.
