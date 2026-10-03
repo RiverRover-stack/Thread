@@ -43,3 +43,36 @@ export const structuredThoughtJsonSchema = z.toJSONSchema(structuredThoughtBaseS
 });
 
 export type StructuredThought = z.infer<typeof structuredThoughtSchema>;
+
+const thoughtConnectionBaseSchema = z.object({
+  hasConnection: z.boolean(),
+  connection: nonEmptyText(600).nullable(),
+  implication: nonEmptyText(600).nullable(),
+  questionToExplore: nonEmptyText(300)
+    .regex(/^.*\?$/, "The exploration question must end with a question mark.")
+    .nullable().optional(),
+}).strict();
+
+// JSON Schema guides generation; this refinement also checks meaning between fields.
+export const thoughtConnectionSchema = thoughtConnectionBaseSchema.superRefine((result, context) => {
+  for (const field of ["connection", "implication"] as const) {
+    if (result.hasConnection && result[field] === null) {
+      context.addIssue({
+        code: "custom", path: [field],
+        message: "A useful connection must include both a connection and an implication.",
+      });
+    }
+    if (!result.hasConnection && result[field] !== null) {
+      context.addIssue({
+        code: "custom", path: [field],
+        message: "When no useful connection exists, connection and implication must be null.",
+      });
+    }
+  }
+});
+
+export const thoughtConnectionJsonSchema = z.toJSONSchema(thoughtConnectionBaseSchema, {
+  target: "draft-7",
+});
+
+export type ThoughtConnectionResult = z.infer<typeof thoughtConnectionSchema>;
