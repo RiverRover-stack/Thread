@@ -20,10 +20,3 @@ async function main() {
 
 void main();
 
-// CHALLENGE (beginner): Add one new thought to the `cases` array near the top.
-// Purpose: Learn how an array supplies inputs to our AI processing loop.
-// TODO(you): Add "I should review my API notes tomorrow morning." as another item.
-// Hint 1: An array is a list between [ and ]; each item here is a quoted string.
-// Hint 2: Separate items with commas. Follow the existing lines as examples.
-// Verify: Run `npm run ai:eval`; a fourth case should appear. Check whether its
-// possibleAction preserves "tomorrow morning". The model may omit it; record what you observe.

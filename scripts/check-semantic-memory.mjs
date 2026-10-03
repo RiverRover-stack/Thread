@@ -10,12 +10,8 @@ if (flags.some((flag) => !["--database", "--embedding"].includes(flag))) {
 }
 
 const EXPECTED_DIMENSIONS = 768;
-// CHALLENGE: Try a different sample to see that different text has the same vector shape.
-// TODO(you): Edit only this string. Hint 1: keep the quotes. Hint 2: use a short
-// sentence. Hint 3: the numbers may change, but the dimension count should not.
-// Verify: npm run memory:check:embedding must still report 768 dimensions.
-// An embedding is an array of numbers representing meaning, not a generated summary.
-const sampleText = "Build a user facing stress detection project and include the model.";
+
+const sampleText = "I want to benchmark my compressed model on a Raspberry Pi.";
 
 async function checkDatabase() {
   if (!process.env.DATABASE_URL) {
