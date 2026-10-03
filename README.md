@@ -4,9 +4,10 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1 is complete. Phase 2, Milestone 1 adds local semantic-memory readiness
-checks and setup instructions; vector indexing and related thoughts come in later
-milestones. The Next.js homepage captures microphone audio, provides
+Phase 1 is complete. Phase 2, Milestone 3 adds transcript chunking and aggregation
+to the validated local embedding adapter
+alongside semantic-memory readiness checks; vector indexing and related thoughts
+come in later milestones. The Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
 stopping. It then sends the raw transcript to a local Gemma model through Ollama
 and validates the structured thought with Zod. It automatically saves the original
@@ -417,3 +418,88 @@ installation or Ollama model configuration. `package.json` exposes the command;
 Practice: edit only `sampleText` in the readiness script as described by its
 `CHALLENGE` / `TODO(you)` comments, then run the embedding-only check. Different
 text should still produce 768 dimensions. Leave the implementation to yourself.
+
+## Embedding adapter (Phase 2, Milestone 2)
+
+Server code calls `embedText(text): Promise<number[]>` through `lib/embeddings/index.ts`.
+`Promise` means the caller awaits the network operation; `number[]` means an array
+of numbers. TypeScript checks this contract during development, while Zod checks
+the actual response at runtime. The adapter is server-only, like the existing
+speech and structuring adapters. It has no browser endpoint yet.
+
+`lib/embeddings/ollama.ts` sends the input text to the existing local Ollama server
+with EmbeddingGemma's sentence-similarity prefix. Leading/trailing spaces and line
+breaks in the input are preserved. The prefix is applied once by the adapter;
+callers supply ordinary text. `OLLAMA_EMBEDDING_MODEL` defaults to `embeddinggemma:300m`
+and remains independent from `OLLAMA_MODEL`, which still selects Gemma structuring.
+The request disables truncation and times out after 120 seconds, including response
+reading. Long transcripts use the processor described below.
+
+`lib/embeddings/schemas.ts` validates one 768-dimensional vector of finite numbers
+with finite, nonzero magnitude. `lib/embeddings/errors.ts` provides safe errors with
+status codes: 400 for invalid caller input, 422 for rejected provider input,
+429 for a busy server, 502 for provider/response failures, 503 for missing models
+or connection failures, and 504 for timeout. Provider error bodies, input text,
+and vectors are not logged. Responses are not cached and retries are explicit.
+
+```powershell
+npm test
+npm run embeddings:eval
+```
+
+`tests/embeddings.test.ts` mocks the network and verifies configuration, exact text
+preservation, request options, vector validation, and safe failures. It never calls
+Ollama. `scripts/evaluate-embeddings.ts` uses the real adapter with synthetic
+samples and reports dimensions, magnitude, and elapsed time without printing text
+or vectors. Neither check writes to the database. These checks establish adapter
+correctness and working inference; semantic ranking will be evaluated with retrieval.
+
+Data flow: caller text → `embedText` → local `/api/embed` → Zod validation → `number[]`.
+Debug first in the Ollama adapter, then check `npm run memory:check:embedding`, the
+local server, and embedding model configuration. An optional exercise in the
+evaluation script asks you to add one sample to the existing `cases` array and
+verify that its output still has 768 dimensions.
+
+## Transcript embedding processing (Phase 2, Milestone 3)
+
+`lib/embeddings/transcript.ts` owns `embedTranscript(rawTranscript): Promise<number[]>`.
+It accepts nonblank text up to the existing 10,000-character save limit and splits
+a working copy into chunks of at most 1,000 UTF-8 bytes with up to 100 bytes of
+overlap. Unicode code points stay intact, including emoji surrogate pairs. Chunk
+boundaries may fall inside words or sentences; overlap retains nearby context.
+The original string, spaces, and line breaks are not rewritten. Whitespace-only
+chunks are omitted from inference because they carry no meaning.
+
+Each chunk goes sequentially through `embedText`; that adapter adds the
+sentence-similarity prefix once and disables silent truncation. The processor
+averages corresponding coordinates of the returned 768-dimensional vectors, then
+divides each coordinate by the mean vector's magnitude to produce a unit vector.
+It rejects invalid input, propagates failed chunks without returning partial
+results, and rejects a zero mean rather than dividing by zero. It performs no
+database writes or automatic retries. A caller retries the whole operation after
+a failure; each chunk uses the adapter's 120-second timeout.
+
+`EMBEDDING_RECIPE_VERSION = 1` identifies this combination of chunking, task
+formatting, averaging, and normalization. Changing those rules requires a version
+bump and later regeneration of stored vectors. A single averaged vector keeps
+storage simple but can weaken retrieval for thoughts containing unrelated topics;
+semantic quality still needs real retrieval evaluation.
+
+```powershell
+npm test
+npm run embeddings:eval
+```
+
+`tests/transcript-embeddings.test.ts` verifies byte boundaries, Unicode, full text
+coverage, overlap, sequential requests, normalized aggregation, and failure paths
+with mocked Ollama responses. The evaluation script retains your existing samples
+and also exercises a synthetic long transcript through the real processor. It
+reports chunk count, dimensions, magnitude, recipe version, and timing without
+printing the transcript or vector. This verifies the processing path, not semantic
+ranking or relevance.
+
+Data flow: raw transcript → bounded chunks → local embeddings → coordinate mean
+→ unit vector. Debug chunk boundaries or aggregation in `transcript.ts`; provider
+failures still start in `lib/embeddings/ollama.ts`. Your optional exercise is to add
+one multilingual fixture to the existing test `cases` array, following its
+`CHALLENGE` / `TODO(you)` comments, then run `npm test`.
