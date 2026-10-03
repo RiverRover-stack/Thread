@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { StructuredThought } from "@/lib/ai/schemas";
 
 type Status = "idle" | "requesting" | "recording" | "stopping" | "transcribing" | "structuring" | "saving";
@@ -343,7 +344,12 @@ export default function VoiceRecorder() {
         {statusText}{(status === "recording" || status === "stopping") && <span className="ml-2 font-mono tabular-nums">{elapsedTime}</span>}
       </p>
       {error && <p role="alert" className="mt-4 text-sm leading-relaxed text-red-800">{error}</p>}
-      {savedThought && <p className="mt-3 text-sm text-emerald-900">Saved at {new Date(savedThought.createdAt).toLocaleString()}</p>}
+      {savedThought && (
+        <p className="mt-3 text-sm text-emerald-900">
+          Saved at {new Date(savedThought.createdAt).toLocaleString()}
+          {" · "}<Link href={`/thoughts/${savedThought.id}`} className="font-semibold underline">Open saved thought</Link>
+        </p>
+      )}
       {transcript && structuredThought && !savedThought && status === "idle" && (
         <button type="button" onClick={() => void saveThought(transcript, structuredThought)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
           Retry saving

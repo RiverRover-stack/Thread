@@ -4,12 +4,13 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1, Milestone 5: the Next.js homepage captures microphone audio, provides
+Phase 1, Milestone 6: the Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
 stopping. It then sends the raw transcript to a local Gemma model through Ollama
 and validates the structured thought with Zod. It automatically saves the original
 transcript and interpretation to PostgreSQL. The homepage and `/thoughts` display
-saved thoughts newest first. Thought detail pages are not implemented yet.
+saved thoughts newest first. Each title opens a saved detail page with the original
+transcript clearly separated from the AI interpretation.
 See PROJECT_SPEC.md for product scope and AGENTS.md for our
 collaboration rules.
 
@@ -103,6 +104,9 @@ Recheck patched Prisma releases before deployment.
 - `components/thoughts/ThoughtTimeline.tsx`: renders saved thoughts, empty state, and database failure feedback.
 - `app/thoughts/page.tsx`: standalone timeline with a link back to capture.
 - `app/thoughts/loading.tsx`: loading feedback during timeline navigation.
+- `app/thoughts/[id]/page.tsx`: loads one saved thought and handles database failures.
+- `app/thoughts/[id]/not-found.tsx`: feedback for invalid or missing thought IDs.
+- `components/thoughts/ThoughtDetail.tsx`: original transcript and AI interpretation sections.
 - `app/api/thoughts/route.ts`: validates and saves both versions with retry-safe IDs.
 - `prisma/migrations/`: versioned SQL that creates the actual database table.
 - `tests/persistence.test.ts`: mocked database tests for validation and retry behavior.
@@ -290,9 +294,32 @@ resolve identical timestamps consistently. Card timestamps explicitly use UTC.
 Verify: create several thoughts, confirm newest first on both pages, refresh, and
 restart Next.js. Saved thoughts should remain visible. An empty database shows a
 helpful empty state; an unavailable database shows an error with a retry link.
-The cards are display-only until thought detail navigation is added in Milestone 6.
+Each card title links to its saved detail page.
 Debug list problems in `lib/db/thoughts.ts`, then `ThoughtTimeline.tsx` and the
 Next.js terminal. If saving succeeds but the list stays stale, check `router.refresh()`.
 With Thread running on localhost:3000, `npm run timeline:verify` creates three
 temporary fixtures, checks query and rendered card order on both pages, and removes
 only those fixtures in a `finally` block.
+
+## Thought detail (Milestone 6)
+
+Open a timeline title or **Open saved thought** after recording. `/thoughts/[id]`
+awaits the URL parameters and uses `getThought(id)` to validate the UUID and query
+one row directly on the server. It does not call transcription or Gemma again.
+Invalid or missing IDs show **Thought not found**; a database failure shows separate
+retry feedback so it is not mistaken for a deleted record.
+
+The detail component displays the original transcript using `whitespace-pre-wrap`
+to retain spaces and line breaks. React escapes its text, so HTML-looking content
+cannot execute. The **AI INTERPRETED** section contains the summary, categories,
+possible action, and question. Absent nullable fields display explicit fallback text.
+Titles are identified as AI-generated; creation times use UTC, matching the timeline.
+
+Manual check: open a saved thought, compare both sections with the capture preview,
+refresh its direct URL, and use **Back to timeline**. Try `/thoughts/invalid-id`
+and a valid UUID that does not exist. With Thread running, `npm run detail:verify`
+checks real detail responses using temporary fixtures and removes only those fixtures.
+`npm test` also verifies invalid IDs never query the database and distinguishes
+missing records from database failures. Start debugging in `getThought` in
+`lib/db/thoughts.ts`, then the detail page, then `ThoughtDetail.tsx` for presentation.
+No new practice challenges are assigned while we finish the core capture flow.

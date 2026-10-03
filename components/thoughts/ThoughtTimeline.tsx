@@ -1,4 +1,6 @@
 import { listThoughts } from "@/lib/db/thoughts";
+import Link from "next/link";
+import RetryLoading from "./RetryLoading";
 
 export default async function ThoughtTimeline() {
   let thoughts: Awaited<ReturnType<typeof listThoughts>>;
@@ -9,7 +11,7 @@ export default async function ThoughtTimeline() {
       <section aria-labelledby="timeline-heading" className="mt-12 border-t border-stone-300 pt-8">
         <h2 id="timeline-heading" className="text-2xl font-semibold">Your thoughts</h2>
         <p role="alert" className="mt-4 text-red-800">Could not load saved thoughts. Check PostgreSQL and your database configuration.</p>
-        <a href="/thoughts" className="mt-3 inline-block font-semibold text-emerald-900 underline">Retry loading thoughts</a>
+        <RetryLoading />
       </section>
     );
   }
@@ -30,7 +32,11 @@ export default async function ThoughtTimeline() {
                     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
                   })} UTC
                 </time>
-                <h3 className="mt-2 break-words text-lg font-semibold">{thought.title}</h3>
+                <h3 className="mt-2 break-words text-lg font-semibold">
+                  <Link href={`/thoughts/${thought.id}`} className="text-emerald-950 underline decoration-stone-300 underline-offset-4 hover:decoration-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4">
+                    {thought.title}
+                  </Link>
+                </h3>
                 <p className="mt-2 break-words leading-relaxed text-stone-600">{thought.summary}</p>
                 <ul aria-label="Categories" className="mt-4 flex flex-wrap gap-2">
                   {thought.categories.map((category) => (

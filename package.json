@@ -17,6 +17,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:verify": "node --conditions=react-server --import tsx scripts/verify-persistence.ts",
     "timeline:verify": "node --conditions=react-server --import tsx scripts/verify-timeline.ts",
+    "detail:verify": "node --conditions=react-server --import tsx scripts/verify-thought-detail.ts",
     "db:validate": "prisma validate",
     "db:check": "node scripts/check-db.mjs"
   },
