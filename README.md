@@ -4,7 +4,9 @@ Don't interrupt a thought to save it.
 
 ## Current scope
 
-Phase 1, Milestone 6: the Next.js homepage captures microphone audio, provides
+Phase 1 is complete. Phase 2, Milestone 1 adds local semantic-memory readiness
+checks and setup instructions; vector indexing and related thoughts come in later
+milestones. The Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
 stopping. It then sends the raw transcript to a local Gemma model through Ollama
 and validates the structured thought with Zod. It automatically saves the original
@@ -323,3 +325,95 @@ checks real detail responses using temporary fixtures and removes only those fix
 missing records from database failures. Start debugging in `getThought` in
 `lib/db/thoughts.ts`, then the detail page, then `ThoughtDetail.tsx` for presentation.
 No new practice challenges are assigned while we finish the core capture flow.
+
+## Semantic-memory foundation (Phase 2, Milestone 1)
+
+Phase 2 uses the existing local Ollama server and PostgreSQL database.
+`OLLAMA_MODEL=gemma3:4b` continues to structure thoughts. The separate
+`OLLAMA_EMBEDDING_MODEL=embeddinggemma:300m` selects an embedding model, which
+returns numbers representing text meaning. This setting defaults to the value
+shown here, so existing `.env.local` files need no edits unless overriding it.
+No npm dependencies are added.
+
+### EmbeddingGemma setup
+
+Keep Ollama running, then download the model once:
+
+```powershell
+ollama pull embeddinggemma:300m
+npm run memory:check:embedding
+```
+
+The download is approximately 622 MB. EmbeddingGemma requires Ollama 0.11.10 or
+newer; the inspected local server is 0.32.5. The diagnostic posts a fixed synthetic
+sentence to local `/api/embed`, requests 768 dimensions, disables truncation, and
+checks for one nonzero vector of finite numbers. It does not read saved thoughts,
+print vectors, or save embeddings. Its timeout is 120 seconds to accommodate the
+first model load. Success proves inference and output shape, not retrieval quality.
+See the [model documentation](https://ollama.com/library/embeddinggemma) and
+[embedding API](https://docs.ollama.com/api/embed).
+
+### pgvector setup on Windows
+
+The local foundation is verified with PostgreSQL 18, pgvector 0.8.7, Visual Studio
+2022 C++ Build Tools, and EmbeddingGemma through Ollama. pgvector was built from
+the official `v0.8.7` tag and enabled in the existing database. The two saved
+thoughts were unchanged, verified by comparing their count and content fingerprint
+before and after enabling the extension. For a fresh Windows setup, PostgreSQL
+development headers and the MSVC x64 toolchain are required before building.
+
+Use the existing PostgreSQL installation and database. Install Visual Studio
+Build Tools with **Desktop development with C++**, including the MSVC x64 tools
+and Windows SDK. Follow the [official Windows instructions](https://github.com/pgvector/pgvector#windows).
+This is a system prerequisite, not an application framework or another database.
+
+In an administrator **x64 Native Tools Command Prompt**, build the pinned extension
+release below. These are cmd commands, not PowerShell commands. The example uses
+a new temporary source folder; if it already exists, inspect it before reusing it.
+
+```bat
+set "PGROOT=C:\Program Files\PostgreSQL\18"
+cd /d "%TEMP%"
+git clone --branch v0.8.7 --depth 1 https://github.com/pgvector/pgvector.git thread-pgvector-0.8.7
+cd thread-pgvector-0.8.7
+nmake /F Makefile.win
+nmake /F Makefile.win install
+```
+
+This installs extension files into PostgreSQL's installation folders. In pgAdmin,
+open the Query Tool for the existing `thread` database and enable the extension:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+Enabling the extension adds its database types/functions; it does not modify the
+Thought table or existing thoughts. The vector-column migration belongs to
+Milestone 4 and will also declare the extension prerequisite for fresh databases.
+Do not reset the database. If the build/install fails or requires a different
+database setup, stop and agree on a fallback before proceeding.
+
+### Readiness checks and debugging
+
+```powershell
+npm run memory:check:db
+npm run memory:check:embedding
+npm run memory:check
+```
+
+The database check runs a read-only transaction. It distinguishes missing
+extension files from an extension that has not been enabled in the configured
+database, then verifies cosine distance using constant vectors without creating
+tables or inserting rows. The full command checks both prerequisites even when
+one fails, and exits unsuccessfully if either is unavailable. Ollama may load the
+model into memory while checking inference.
+
+Data flow: `.env.local` → PostgreSQL extension metadata / constant distance query;
+fixed sample → local Ollama → validate vector shape → readiness message.
+Debug first in `scripts/check-semantic-memory.mjs`, then PostgreSQL extension
+installation or Ollama model configuration. `package.json` exposes the command;
+`.env.example` lists the independent embedding model setting.
+
+Practice: edit only `sampleText` in the readiness script as described by its
+`CHALLENGE` / `TODO(you)` comments, then run the embedding-only check. Different
+text should still produce 768 dimensions. Leave the implementation to yourself.

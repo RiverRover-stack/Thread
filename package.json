@@ -19,7 +19,10 @@
     "timeline:verify": "node --conditions=react-server --import tsx scripts/verify-timeline.ts",
     "detail:verify": "node --conditions=react-server --import tsx scripts/verify-thought-detail.ts",
     "db:validate": "prisma validate",
-    "db:check": "node scripts/check-db.mjs"
+    "db:check": "node scripts/check-db.mjs",
+    "memory:check": "node scripts/check-semantic-memory.mjs",
+    "memory:check:db": "node scripts/check-semantic-memory.mjs --database",
+    "memory:check:embedding": "node scripts/check-semantic-memory.mjs --embedding"
   },
   "dependencies": {
     "@next/env": "16.3.8",
