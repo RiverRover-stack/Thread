@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "node --conditions=react-server --import tsx --test tests/*.test.ts",
     "ai:eval": "node --conditions=react-server --import tsx scripts/evaluate-ai.ts",
+    "connections:eval": "node --conditions=react-server --import tsx scripts/evaluate-connections.ts",
     "typecheck": "prisma generate && next typegen && tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

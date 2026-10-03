@@ -71,7 +71,19 @@ export const thoughtConnectionSchema = thoughtConnectionBaseSchema.superRefine((
   }
 });
 
-export const thoughtConnectionJsonSchema = z.toJSONSchema(thoughtConnectionBaseSchema, {
+// Constrain generation to the two valid shapes as well as validating afterward.
+// A plain boolean + nullable strings lets the provider generate contradictory fields.
+const thoughtConnectionGenerationSchema = z.union([
+  thoughtConnectionBaseSchema.extend({
+    hasConnection: z.literal(false), connection: z.null(), implication: z.null(),
+    questionToExplore: z.null().optional(),
+  }),
+  thoughtConnectionBaseSchema.extend({
+    hasConnection: z.literal(true), connection: nonEmptyText(600), implication: nonEmptyText(600),
+  }),
+]);
+
+export const thoughtConnectionJsonSchema = z.toJSONSchema(thoughtConnectionGenerationSchema, {
   target: "draft-7",
 });
 

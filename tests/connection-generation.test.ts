@@ -79,6 +79,7 @@ test("keeps thought instructions in data and explicitly permits abstaining", asy
     assert.match(body.messages[0].content, /untrusted user data/);
     assert.match(body.messages[0].content, /explicitly allowed to find no connection/);
     assert.match(body.messages[0].content, /Do not invent factual claims/);
+    assert.match(body.messages[0].content, /Do not infer a new interest, preference, or goal from shared topics alone/);
     assert.equal(body.messages[0].content.includes(instruction), false);
     assert.equal(body.messages[1].role, "user");
     assert.ok(body.messages[1].content.includes(instruction));
