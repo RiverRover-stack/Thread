@@ -1,0 +1,54 @@
+{
+  "startedAt": "2026-10-04T15:02:27.049Z",
+  "checks": [
+    {
+      "label": "health",
+      "status": 200,
+      "elapsedMs": 997
+    },
+    {
+      "label": "ElevenLabs transcription",
+      "status": 200,
+      "elapsedMs": 3136
+    },
+    {
+      "label": "hosted Gemma structuring",
+      "status": 200,
+      "elapsedMs": 2815
+    },
+    {
+      "label": "save synthetic thought",
+      "status": 200,
+      "elapsedMs": 2300
+    },
+    {
+      "label": "retrieval before indexing is guarded",
+      "status": 409,
+      "elapsedMs": 286
+    },
+    {
+      "label": "Google embedding and indexing",
+      "status": 200,
+      "elapsedMs": 535
+    },
+    {
+      "label": "index retry reuses the vector",
+      "status": 200,
+      "elapsedMs": 290
+    },
+    {
+      "label": "pgvector retrieval",
+      "status": 200,
+      "elapsedMs": 269
+    },
+    {
+      "label": "Gemma connection workflow",
+      "status": 200,
+      "elapsedMs": 1229
+    }
+  ],
+  "syntheticThoughtId": "b5d8830c-ef9a-4988-8fed-248f1f82c78c",
+  "relatedCount": 3,
+  "connectionPresent": false,
+  "finishedAt": "2026-10-04T15:02:38.919Z"
+}
