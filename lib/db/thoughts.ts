@@ -5,6 +5,7 @@ import { getEmbeddingSource } from "./embeddings";
 import { embeddingModelName } from "../embeddings/config";
 import { EMBEDDING_RECIPE_VERSION } from "../embeddings/transcript";
 import { EmbeddingError } from "../embeddings/errors";
+import { recordCandidateCount, traceOperation } from "../observability/trace";
 
 export const thoughtContentSelect = {
   id: true, rawTranscript: true, title: true, summary: true, categories: true,
@@ -29,6 +30,16 @@ export type RelatedThought = {
 };
 
 export async function getRelatedThoughts(id: string): Promise<RelatedThought[] | null> {
+  return traceOperation("retrieve", {
+    "gen_ai.operation.name": "execute_tool", "gen_ai.operation.type": "tool", "gen_ai.tool.name": "retrieve",
+  }, async () => {
+    const result = await retrieveRelatedThoughts(id);
+    if (result) recordCandidateCount(result.length);
+    return result;
+  });
+}
+
+async function retrieveRelatedThoughts(id: string): Promise<RelatedThought[] | null> {
   const source = await getEmbeddingSource(id);
   if (!source) return null;
   const model = embeddingModelName();

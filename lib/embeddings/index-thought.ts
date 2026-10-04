@@ -2,8 +2,15 @@ import "server-only";
 import { getEmbeddingSource, storeEmbedding } from "../db/embeddings";
 import { embedTranscript, EMBEDDING_RECIPE_VERSION } from "./transcript";
 import { embeddingModelName } from "./config";
+import { traceOperation } from "../observability/trace";
 
 export async function indexThought(id: string) {
+  return traceOperation("index", {
+    "gen_ai.operation.name": "execute_tool", "gen_ai.operation.type": "tool", "gen_ai.tool.name": "index",
+  }, () => prepareEmbedding(id));
+}
+
+async function prepareEmbedding(id: string) {
   const model = embeddingModelName();
   const source = await getEmbeddingSource(id);
   if (!source) return null;

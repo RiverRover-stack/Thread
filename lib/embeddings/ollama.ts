@@ -1,4 +1,5 @@
 import "server-only";
+import { recordUsage } from "../observability/trace";
 import { EmbeddingError } from "./errors";
 import { embeddingModelName } from "./config";
 import { EMBEDDING_DIMENSIONS, embeddingInputSchema, embeddingResponseSchema } from "./schemas";
@@ -53,6 +54,7 @@ export async function embedWithOllama(text: string): Promise<number[]> {
       throw new EmbeddingError("The local embedding model returned an unreadable response. Please retry.", 502);
     }
     const validated = embeddingResponseSchema.safeParse(result);
+    if (result && typeof result === "object" && "prompt_eval_count" in result) recordUsage(result.prompt_eval_count, undefined);
     if (!validated.success) {
       throw new EmbeddingError("The local embedding model returned an invalid vector. Please retry.", 502);
     }

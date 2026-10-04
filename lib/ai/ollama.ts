@@ -1,4 +1,5 @@
 import "server-only";
+import { recordUsage } from "../observability/trace";
 import { SYSTEM_PROMPT, CONNECTION_PROMPT } from "./prompts";
 import { ThoughtConnectionError, ThoughtStructuringError } from "./errors";
 import {
@@ -11,6 +12,8 @@ import {
 } from "./schemas";
 
 type OllamaChatResponse = {
+  prompt_eval_count?: unknown;
+  eval_count?: unknown;
   message?: {
     content?: unknown;
   };
@@ -60,6 +63,8 @@ export async function connectWithOllama(
       || typeof result.message.content !== "string") {
       throw new ThoughtConnectionError("The local AI model returned an invalid response. Please retry.", 502);
     }
+    const usage = result as Record<string, unknown>;
+    recordUsage(usage.prompt_eval_count, usage.eval_count);
     let parsed: unknown;
     try {
       parsed = JSON.parse(result.message.content);
@@ -124,6 +129,7 @@ export async function structureWithOllama(transcript: string): Promise<Structure
       throw new ThoughtStructuringError("The local AI model returned an unreadable response. Please retry.", 502);
     }
     const content = result.message?.content;
+    recordUsage(result.prompt_eval_count, result.eval_count);
     if (typeof content !== "string") {
       throw new ThoughtStructuringError("The local AI model returned an invalid response. Please retry.", 502);
     }

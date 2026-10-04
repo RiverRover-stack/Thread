@@ -1,4 +1,5 @@
 import "server-only";
+import { recordUsage } from "../observability/trace";
 import { z } from "zod";
 import { ThoughtConnectionError, ThoughtStructuringError } from "./errors";
 import { CONNECTION_PROMPT, SYSTEM_PROMPT } from "./prompts";
@@ -62,7 +63,15 @@ async function generateJson(
       }
       throw new ErrorType("Hosted Gemma could not complete this request. Please retry.", 502);
     }
-    const parsed = responseSchema.safeParse(await response.json());
+    const result: unknown = await response.json();
+    if (result && typeof result === "object" && "usageMetadata" in result
+      && result.usageMetadata && typeof result.usageMetadata === "object") {
+      const usage = result.usageMetadata as Record<string, unknown>;
+      const output = typeof usage.candidatesTokenCount === "number" ? usage.candidatesTokenCount : undefined;
+      const thinking = typeof usage.thoughtsTokenCount === "number" ? usage.thoughtsTokenCount : 0;
+      recordUsage(usage.promptTokenCount, output === undefined ? undefined : output + thinking);
+    }
+    const parsed = responseSchema.safeParse(result);
     if (!parsed.success || parsed.data.promptFeedback?.blockReason) {
       throw new ErrorType("Hosted Gemma returned no usable response. Please retry.", 502);
     }

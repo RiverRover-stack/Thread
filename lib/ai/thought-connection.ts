@@ -2,8 +2,15 @@ import "server-only";
 import { getRelatedThoughts, getThought } from "../db/thoughts";
 import { findThoughtConnection } from "./index";
 import type { ThoughtConnectionResult } from "./schemas";
+import { traceOperation } from "../observability/trace";
 
 export async function getThoughtConnection(id: string): Promise<ThoughtConnectionResult | null> {
+  return traceOperation("connection-workflow", {
+    "gen_ai.operation.name": "invoke_agent", "gen_ai.operation.type": "agent", "gen_ai.agent.name": "Thread thought connection",
+  }, () => analyzeConnection(id));
+}
+
+async function analyzeConnection(id: string): Promise<ThoughtConnectionResult | null> {
   const currentThought = await getThought(id);
   if (!currentThought) return null;
 
