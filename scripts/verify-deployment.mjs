@@ -56,7 +56,7 @@ async function main() {
   const signedOut = await request("/api/auth/logout", { method: "POST", headers: { cookie, origin: target.origin } }, false);
   assert.equal(signedOut.status, 303);
   assert.ok(signedOut.headers.get("set-cookie")?.includes("Max-Age=0"));
-  assert.equal((await request("/", { headers: { "sec-fetch-mode": "navigate" } })).status, 307);
+  assert.equal((await request("/", { headers: { "sec-fetch-mode": "navigate", "sec-fetch-site": "none" } })).status, 307);
   assert.equal((await request("/api/process", {
     method: "POST", headers: { origin: "https://unrelated.example" },
   })).status, 403);

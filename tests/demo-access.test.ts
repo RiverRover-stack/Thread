@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { NextRequest } from "next/server";
-import { accessFailure, requestAccessFailure } from "../lib/demo-access";
+import { accessFailure, createSession, requestAccessFailure, sessionCookieName } from "../lib/demo-access";
 import { proxy } from "../proxy";
 import { POST as processThought } from "../app/api/process/route";
 import { POST as transcribe } from "../app/api/transcribe/route";
@@ -77,7 +77,7 @@ test("rejects authenticated cross-site browser writes while allowing same-origin
     const request = new Request("https://thread.example/api/transcribe", { method: "POST", headers: { authorization, host: "thread.example", origin } });
     assert.equal(requestAccessFailure(request)?.status, 403);
   }
-  const crossSite = new Request("https://thread.example/api/transcribe", { method: "POST", headers: { authorization, "sec-fetch-site": "cross-site" } });
+  const crossSite = new Request("https://thread.example/api/transcribe", { method: "POST", headers: { cookie: `${sessionCookieName()}=${createSession()}`, "sec-fetch-site": "cross-site" } });
   assert.equal(requestAccessFailure(crossSite)?.status, 403);
   const sameOriginHeaders: Record<string, string>[] = [{ origin: "https://thread.example" }, {}];
   for (const extra of sameOriginHeaders) {
