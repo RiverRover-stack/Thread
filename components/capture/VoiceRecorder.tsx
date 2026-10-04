@@ -35,7 +35,7 @@ function microphoneError(error: unknown): string {
   return "Recording could not start. Check your microphone and try again.";
 }
 
-export default function VoiceRecorder({ hostedInference = false, publicDemo = false }: { hostedInference?: boolean; publicDemo?: boolean }) {
+export default function VoiceRecorder({ publicDemo = false }: { publicDemo?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [recording, setRecording] = useState<Recording | null>(null);
