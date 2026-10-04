@@ -7,6 +7,11 @@ login/logout pass. The earlier browser authentication error is resolved by the
 normal login page. Microphone capture remains a manual verification step.
 Stop for verification after each milestone.
 
+The approved public-demo rollout adds isolated visitor workspaces and persistent
+spending controls. See [PUBLIC_DEMO.md](PUBLIC_DEMO.md) for its configuration,
+current verification status and rollback instructions. This document's login
+instructions describe `THREAD_ACCESS_MODE=private`, the default and rollback mode.
+
 ## Decisions before publishing
 
 - Reasoning hosting is agreed: use Google AI Studio's hosted Gemma API on Render

@@ -15,18 +15,18 @@ const db = globalThis as unknown as { threadPrisma?: PrismaClient };
 const originalDatabase = db.threadPrisma;
 let used: Map<string, number>, calls: number;
 const structured = { title: "Example", summary: "A synthetic thought", categories: ["study"], actionable: false, possibleAction: null, questionToExplore: null };
-function fakeDatabase(exhausted = false) {
+function fakeDatabase(exhausted = false, exhaustedBucket?: string) {
   db.threadPrisma = { $transaction: async (operation: (tx: unknown) => Promise<unknown>) => {
     const before = new Map(used);
     try { return await operation({
       $queryRaw: async () => [],
       usageCounter: {
-        upsert: async ({ where }: { where: { stage_scope_bucket_startsAt: { stage: string; scope: string } } }) => {
-          const { stage, scope } = where.stage_scope_bucket_startsAt;
-          return { used: exhausted ? 1000 : used.get(`${stage}:${scope}`) || 0 };
+        upsert: async ({ where }: { where: { stage_scope_bucket_startsAt: { stage: string; scope: string; bucket: string } } }) => {
+          const { stage, scope, bucket } = where.stage_scope_bucket_startsAt;
+          return { used: exhausted || bucket === exhaustedBucket ? 1000 : used.get(`${stage}:${scope}:${bucket}`) || 0 };
         },
-        update: async ({ where }: { where: { stage_scope_bucket_startsAt: { stage: string; scope: string } } }) => {
-          const { stage, scope } = where.stage_scope_bucket_startsAt, key = `${stage}:${scope}`;
+        update: async ({ where }: { where: { stage_scope_bucket_startsAt: { stage: string; scope: string; bucket: string } } }) => {
+          const { stage, scope, bucket } = where.stage_scope_bucket_startsAt, key = `${stage}:${scope}:${bucket}`;
           used.set(key, (used.get(key) || 0) + 1);
         },
       },
@@ -72,14 +72,28 @@ test("exhausted budgets, disabled AI, and unavailable storage never call the pro
 test("provider failure consumes its reservation and does not retry", async () => {
   globalThis.fetch = async () => { calls++; return new Response(null, { status: 503 }); };
   await assert.rejects(structureThought("Example", "workspace"));
-  assert.equal(calls, 1); assert.equal(used.get("structure:global"), 2); assert.equal(used.get("structure:workspace"), 2);
+  assert.equal(calls, 1);
+  for (const timezone of ["UTC", "Asia/Kolkata"]) {
+    assert.equal(used.get(`structure:global:${timezone}:day`), 1);
+    assert.equal(used.get(`structure:workspace:${timezone}:hour`), 1);
+  }
+});
+test("changing display timezone cannot bypass either exhausted calendar; rollback includes both", async () => {
+  for (const exhausted of ["UTC", "Asia/Kolkata"]) {
+    process.env.THREAD_QUOTA_TIMEZONE = exhausted === "UTC" ? "Asia/Kolkata" : "UTC";
+    fakeDatabase(false, `${exhausted}:day`);
+    await assert.rejects(structureThought("Example", "workspace"), error => error instanceof UsageError && error.status === 429);
+    assert.equal(used.size, 0);
+  }
+  assert.equal(calls, 0);
 });
 test("embedding budgets count actual chunks and empty candidates consume no inference", async () => {
   globalThis.fetch = async () => { calls++; return Response.json({ embeddings: [[1, ...Array(767).fill(0)]] }); };
   await embedTranscript("x".repeat(1500), "workspace");
-  assert.equal(calls, 2); assert.equal(used.get("embed:global"), 4);
+  assert.equal(calls, 2);
+  for (const timezone of ["UTC", "Asia/Kolkata"]) assert.equal(used.get(`embed:global:${timezone}:day`), 2);
   assert.equal((await findThoughtConnection(structured, [], "workspace")).hasConnection, false);
-  assert.equal(used.get("connect:global"), undefined);
+  assert.ok(![...used.keys()].some(key => key.startsWith("connect:")));
 });
 test("private mode retains its existing provider behavior without counters", async () => {
   process.env.THREAD_ACCESS_MODE = "private";
@@ -114,7 +128,8 @@ test("invalid audio consumes nothing; transcription sends only bounded audio onc
     return Response.json({ text: "Synthetic transcript" });
   };
   assert.equal(await transcribeAudio(wave(70), "workspace"), "Synthetic transcript");
-  assert.equal(calls, 1); assert.equal(used.get("transcribe:global"), 2);
+  assert.equal(calls, 1);
+  for (const timezone of ["UTC", "Asia/Kolkata"]) assert.equal(used.get(`transcribe:global:${timezone}:day`), 1);
 });
 test("missing FFmpeg fails closed without reserving or sending audio", async () => {
   mock.method(process, "cwd", () => path.join(tmpdir(), `thread-no-decoder-${randomUUID()}`));

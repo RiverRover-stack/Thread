@@ -168,3 +168,21 @@ Issues for `Thread allowance failed` (database reservation/storage failures) or
 the failing provider stage. Expected quota denials and disabled AI create no
 generic failure issue; database failures are reported with a fixed, filtered
 message and never include database errors, URLs, visitor IDs or credentials.
+
+### October 4 private production verification
+
+Implementation commit `c113066` is pushed and deployed on
+`https://thread-e5b3.onrender.com/`. Active deployment:
+`dep-db19cvenfi0s7396772g`. Both ownership and usage migrations applied successfully
+on production; Render's Linux build printed the FFmpeg trimming PASS. The private
+HTTPS verification script passed after migration: login/logout, protected pages
+and APIs, liveness, and cross-site write rejection. The post-rollout error-log
+query returned no error-level entries for the rollout window.
+
+Local checks now pass 114 tests, including an explicit display-timezone bypass
+regression test. Build, lint, typecheck, the real PostgreSQL cross-calendar race
+check, and the HTTP workspace/capacity check passed. A random session signing
+secret is configured privately on Render. No provider calls were made during
+this private rollout. Public mode and AI remain disabled pending confirmation
+of the dedicated capped ElevenLabs key. Public paid workflow verification and
+submission screenshots have not yet been completed.
