@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { publicDemo, workspaceConfigurationValid, workspaceFromHeaders } from "./workspace";
 
 type RequestHeaders = Pick<Headers, "get">;
 
@@ -14,6 +15,8 @@ function denied(message: string, status: number) {
 }
 
 export function accessConfigurationFailure(): Response | null {
+  if (process.env.THREAD_ACCESS_MODE && !["private", "public-demo"].includes(process.env.THREAD_ACCESS_MODE)) return denied("Thread access mode is invalid.", 503);
+  if (publicDemo()) return workspaceConfigurationValid() ? null : denied("Thread visitor access is not configured.", 503);
   const password = process.env.THREAD_ACCESS_PASSWORD;
   if (!password) {
     return process.env.NODE_ENV === "production"
@@ -73,6 +76,7 @@ export function sessionCookie(token: string, clear = false): string {
 export function accessFailure(headers: RequestHeaders): Response | null {
   const configuration = accessConfigurationFailure();
   if (configuration) return configuration;
+  if (publicDemo()) return workspaceFromHeaders(headers) ? null : denied("Reload Thread to start your visitor workspace.", 401);
   if (!process.env.THREAD_ACCESS_PASSWORD || validSession(headers)) return null;
   // Browsers must use cookies: old cached Basic credentials must not undo logout.
   if (headers.get("sec-fetch-site")) return denied("Sign in to Thread.", 401);
@@ -91,7 +95,7 @@ export function accessFailure(headers: RequestHeaders): Response | null {
 }
 
 export function crossSiteFailure(request: Request, requireOrigin = false): Response | null {
-  if (process.env.THREAD_ACCESS_PASSWORD && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+  if ((publicDemo() || process.env.THREAD_ACCESS_PASSWORD) && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     if (request.headers.get("sec-fetch-site") === "cross-site") {
       return denied("Use Thread from its own site to submit requests.", 403);
     }
@@ -114,5 +118,5 @@ export function crossSiteFailure(request: Request, requireOrigin = false): Respo
 }
 
 export function requestAccessFailure(request: Request): Response | null {
-  return accessFailure(request.headers) || crossSiteFailure(request, validSession(request.headers));
+  return accessFailure(request.headers) || crossSiteFailure(request, publicDemo() || validSession(request.headers));
 }

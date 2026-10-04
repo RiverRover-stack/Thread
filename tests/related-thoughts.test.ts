@@ -29,7 +29,7 @@ test("retrieval binds parameters, excludes incompatible/future thoughts and retu
   let reads = 0;
   databaseGlobal.threadPrisma = { $queryRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
     if (++reads === 1) return [source];
-    assert.deepEqual(values, [id, "embeddinggemma:300m", 1, 0.7]);
+    assert.deepEqual(values, [id, null, null, "embeddinggemma:300m", 1, 0.7]);
     const query = sql.join("");
     assert.match(query, /related.id <> current.id/);
     assert.match(query, /related\."createdAt" < current\."createdAt"/);

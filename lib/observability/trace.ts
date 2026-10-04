@@ -1,6 +1,8 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
 import { safeAttributes, type Stage } from "./privacy";
+import { UsageError } from "../usage";
+import { EmbeddingError } from "../embeddings/errors";
 
 type Metadata = Record<string, string | number>;
 function telemetry(action: () => void) {
@@ -24,6 +26,10 @@ export async function traceOperation<T>(stage: Stage, metadata: Metadata, operat
           telemetry(() => span.setAttribute("thread.outcome", "success"));
           return result;
         } catch (error) {
+          if (error instanceof UsageError || (error instanceof EmbeddingError && error.status === 409)) {
+            telemetry(() => span.setAttribute("thread.outcome", "skipped"));
+            throw error;
+          }
           telemetry(() => {
             span.setAttribute("thread.outcome", "error");
             span.setStatus({ code: 2, message: "internal_error" });

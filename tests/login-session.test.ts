@@ -107,12 +107,12 @@ test("login and cookie-authenticated writes reject absent, invalid, insecure and
   assert.equal(requestAccessFailure(new Request("https://thread.example/api/process", { method: "POST", headers: { cookie: cookieHeaders().get("cookie")!, origin: "https://thread.example" } })), null);
 });
 
-test("login and static build assets are public while APIs and data representations stay guarded", () => {
+test("login and static build assets are public while APIs and data representations stay guarded", async () => {
   for (const path of ["/login", "/_next/static/chunks/app.js", "/favicon.ico"]) {
-    assert.equal(proxy(new NextRequest(`https://thread.example${path}`)).headers.get("x-middleware-next"), "1");
+    assert.equal((await proxy(new NextRequest(`https://thread.example${path}`))).headers.get("x-middleware-next"), "1");
   }
-  assert.equal(proxy(new NextRequest("https://thread.example/api/auth/login", { method: "POST" })).headers.get("x-middleware-next"), "1");
-  assert.equal(proxy(new NextRequest("https://thread.example/api/auth/logout", { method: "POST" })).status, 401);
-  assert.equal(proxy(new NextRequest("https://thread.example/_next/data/build/thoughts.json")).status, 401);
-  assert.equal(proxy(new NextRequest("https://thread.example/thoughts", { headers: cookieHeaders() })).headers.get("x-middleware-next"), "1");
+  assert.equal((await proxy(new NextRequest("https://thread.example/api/auth/login", { method: "POST" }))).headers.get("x-middleware-next"), "1");
+  assert.equal((await proxy(new NextRequest("https://thread.example/api/auth/logout", { method: "POST" }))).status, 401);
+  assert.equal((await proxy(new NextRequest("https://thread.example/_next/data/build/thoughts.json"))).status, 401);
+  assert.equal((await proxy(new NextRequest("https://thread.example/thoughts", { headers: cookieHeaders() }))).headers.get("x-middleware-next"), "1");
 });

@@ -38,11 +38,11 @@ function request(body: unknown = payload) {
 
 test("saves the exact raw transcript and retries without overwriting", async () => {
   process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
-  const row = { id: payload.id, rawTranscript: payload.rawTranscript, ...payload.structuredThought, createdAt: new Date() };
+  const row = { id: payload.id, workspaceId: null, rawTranscript: payload.rawTranscript, ...payload.structuredThought, createdAt: new Date() };
   const upsert = mockDatabase(async (query: unknown) => {
     assert.deepEqual(query, {
-      where: { id: payload.id }, create: { id: payload.id, rawTranscript: payload.rawTranscript, ...payload.structuredThought }, update: {},
-      select: thoughtContentSelect,
+      where: { id: payload.id }, create: { id: payload.id, workspaceId: null, rawTranscript: payload.rawTranscript, ...payload.structuredThought }, update: {},
+      select: { ...thoughtContentSelect, workspaceId: true },
     });
     return row;
   });
@@ -66,7 +66,7 @@ test("rejects invalid input and missing configuration", async () => {
 test("rejects a reused ID with different content and hides database errors", async () => {
   process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
   mockDatabase(async () => ({
-    id: payload.id, rawTranscript: "Different original text", ...payload.structuredThought, createdAt: new Date(),
+    id: payload.id, workspaceId: null, rawTranscript: "Different original text", ...payload.structuredThought, createdAt: new Date(),
   }));
   assert.equal((await POST(request())).status, 409);
   mock.restoreAll();

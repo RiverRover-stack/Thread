@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { StructuredThought } from "@/lib/ai/schemas";
+import DemoUsage from "./DemoUsage";
 
 type Status = "idle" | "requesting" | "recording" | "stopping" | "transcribing" | "structuring" | "saving";
 type Recording = { blob: Blob; url: string };
@@ -35,7 +36,7 @@ function microphoneError(error: unknown): string {
   return "Recording could not start. Check your microphone and try again.";
 }
 
-export default function VoiceRecorder({ hostedInference = false }: { hostedInference?: boolean }) {
+export default function VoiceRecorder({ hostedInference = false, publicDemo = false }: { hostedInference?: boolean; publicDemo?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [recording, setRecording] = useState<Recording | null>(null);
@@ -65,6 +66,17 @@ export default function VoiceRecorder({ hostedInference = false }: { hostedInfer
 
     return () => window.clearInterval(timer);
   }, [status]);
+
+  useEffect(() => {
+    if (!publicDemo || status !== "recording") return;
+    const timer = window.setTimeout(() => {
+      const recorder = recorderRef.current;
+      if (!recorder || recorder.state !== "recording") return;
+      setStatus("stopping"); recorder.stop();
+      streamRef.current?.getTracks().forEach(track => track.stop());
+    }, 60_000);
+    return () => window.clearTimeout(timer);
+  }, [publicDemo, status]);
 
   useEffect(() => {
     return () => {
@@ -357,6 +369,7 @@ export default function VoiceRecorder({ hostedInference = false }: { hostedInfer
   return (
     <section aria-labelledby="capture-heading" className="mt-10 min-w-0 rounded-2xl border border-stone-300 bg-white p-6 sm:p-8">
       <h2 id="capture-heading" className="text-xl font-semibold">Capture a thought</h2>
+      {publicDemo && <DemoUsage refreshKey={status} />}
       <p className="mt-2 text-sm leading-relaxed text-stone-600">
         Say what&apos;s on your mind. Stop when you&apos;re done, and Thread will turn it into a thought you can come back to.
       </p>

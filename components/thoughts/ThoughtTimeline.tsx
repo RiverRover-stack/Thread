@@ -1,11 +1,13 @@
 import { listThoughts } from "@/lib/db/thoughts";
 import Link from "next/link";
 import RetryLoading from "./RetryLoading";
+import { headers } from "next/headers";
+import { requestWorkspace } from "@/lib/workspace";
 
 export default async function ThoughtTimeline() {
   let thoughts: Awaited<ReturnType<typeof listThoughts>>;
   try {
-    thoughts = await listThoughts();
+    thoughts = await listThoughts(requestWorkspace(await headers()));
   } catch {
     return (
       <section aria-labelledby="timeline-heading" className="mt-12 border-t border-stone-300 pt-8">

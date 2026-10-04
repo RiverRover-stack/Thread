@@ -5,6 +5,8 @@ import { sanitizeError, sanitizeSpan, safeAttributes, traceSampleRate } from "..
 import { recordCandidateCount, recordUsage, traceOperation } from "../lib/observability/trace";
 import { initializeSentry, sentryOptions } from "../sentry.server.config";
 import { structureThought } from "../lib/ai";
+import { UsageError } from "../lib/usage";
+import { EmbeddingError } from "../lib/embeddings/errors";
 
 const secret = "PRIVATE_THOUGHT_PASSWORD_API_KEY";
 const envelopes: unknown[] = [];
@@ -61,6 +63,9 @@ test("error export discards content from requests, exceptions, breadcrumbs and s
   assert.equal(event?.message, "Thread connect failed");
   assert.equal(JSON.stringify(event).includes(secret), false);
   assert.equal(sanitizeError({ type: undefined, message: secret }), null);
+  const storage = sanitizeError({ type: undefined, message: secret, tags: { "thread.stage": "allowance" }, extra: { secret } });
+  assert.equal(storage?.message, "Thread allowance failed");
+  assert.equal(JSON.stringify(storage).includes(secret), false);
 });
 
 test("sampling is bounded and all automatic content collection is disabled", () => {
@@ -134,6 +139,17 @@ test("operation failures keep their original error and emit only a safe stage fa
   assert.equal(calls, 1);
   assert.ok(JSON.stringify(envelopes).includes("Thread embed failed"));
   assert.equal(JSON.stringify(envelopes).includes(secret), false);
+});
+
+test("quota denials and pre-index guards retain traces without creating failure issues", async () => {
+  const start = envelopes.length;
+  for (const error of [new UsageError("Allowance exhausted", 429, 60), new EmbeddingError("Index first", 409)]) {
+    await assert.rejects(traceOperation("retrieve", {}, async () => { throw error; }), actual => actual === error);
+  }
+  await Sentry.flush(2000);
+  const output = JSON.stringify(envelopes.slice(start));
+  assert.ok(!output.includes("Thread retrieve failed"));
+  assert.ok(output.includes("skipped"));
 });
 
 test("Sentry delivery failure does not change or retry a successful provider operation", async () => {

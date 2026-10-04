@@ -33,7 +33,7 @@ test("indexes stored text and binds vector, metadata and UUID as SQL parameters"
     $queryRaw: async (_sql: unknown, parameter: string) => { assert.equal(parameter, id); return [source]; },
     $executeRaw: async (sql: TemplateStringsArray, ...parameters: unknown[]) => {
       writes += 1;
-      assert.deepEqual(parameters, [JSON.stringify(vector), "embeddinggemma:300m", 1, id, "embeddinggemma:300m", 1]);
+      assert.deepEqual(parameters, [JSON.stringify(vector), "embeddinggemma:300m", 1, id, null, "embeddinggemma:300m", 1]);
       assert.ok(sql.join("").includes("IS DISTINCT FROM"));
       assert.ok(!sql.join("").includes(source.rawTranscript));
       return 1;

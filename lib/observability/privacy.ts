@@ -3,7 +3,7 @@ import type { ErrorEvent, init } from "@sentry/nextjs";
 // Derive the SDK's streamed-span type from its public configuration hook.
 type StreamedSpanJSON = Parameters<NonNullable<Parameters<typeof init>[0]["beforeSendSpan"]>>[0];
 
-export const stages = ["transcribe", "structure", "embed", "index", "retrieve", "connect", "connection-workflow"] as const;
+export const stages = ["transcribe", "structure", "embed", "index", "retrieve", "connect", "connection-workflow", "allowance"] as const;
 export type Stage = typeof stages[number];
 
 const stringValues: Record<string, readonly string[]> = {

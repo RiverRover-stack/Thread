@@ -1,6 +1,8 @@
 import { transcribeAudio } from "@/lib/speech";
 import { TranscriptionError } from "@/lib/speech/errors";
 import { requestAccessFailure } from "@/lib/demo-access";
+import { requestWorkspace } from "@/lib/workspace";
+import { usageFailure } from "@/lib/usage";
 
 export const runtime = "nodejs";
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
@@ -60,9 +62,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const transcript = await transcribeAudio(audio);
+    const transcript = await transcribeAudio(audio, requestWorkspace(request.headers));
     return Response.json({ transcript }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    const allowance = usageFailure(error); if (allowance) return allowance;
     if (error instanceof TranscriptionError) return failure(error.message, error.status);
     return failure("Transcription failed unexpectedly. Please retry.", 500);
   }

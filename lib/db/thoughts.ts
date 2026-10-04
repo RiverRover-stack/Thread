@@ -6,41 +6,46 @@ import { embeddingModelName } from "../embeddings/config";
 import { EMBEDDING_RECIPE_VERSION } from "../embeddings/transcript";
 import { EmbeddingError } from "../embeddings/errors";
 import { recordCandidateCount, traceOperation } from "../observability/trace";
+import { requireWorkspaceScope } from "../workspace";
 
 export const thoughtContentSelect = {
   id: true, rawTranscript: true, title: true, summary: true, categories: true,
   actionable: true, possibleAction: true, questionToExplore: true, createdAt: true,
 } as const;
 
-export async function listThoughts() {
+export async function listThoughts(workspace: string | null = null) {
+  requireWorkspaceScope(workspace);
   return getDatabase().thought.findMany({
+    where: { workspaceId: workspace },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { id: true, title: true, summary: true, categories: true, createdAt: true },
   });
 }
 
-export async function getThought(id: string) {
+export async function getThought(id: string, workspace: string | null = null) {
+  requireWorkspaceScope(workspace);
   // URL parameters are external input. Invalid UUIDs should be a 404, not a SQL error.
   if (!z.uuid().safeParse(id).success) return null;
-  return getDatabase().thought.findUnique({ where: { id }, select: thoughtContentSelect });
+  return getDatabase().thought.findUnique({ where: { id, workspaceId: workspace }, select: thoughtContentSelect });
 }
 
 export type RelatedThought = {
   id: string; title: string; summary: string; createdAt: Date; similarity: number;
 };
 
-export async function getRelatedThoughts(id: string): Promise<RelatedThought[] | null> {
+export async function getRelatedThoughts(id: string, workspace: string | null = null): Promise<RelatedThought[] | null> {
+  requireWorkspaceScope(workspace);
   return traceOperation("retrieve", {
     "gen_ai.operation.name": "execute_tool", "gen_ai.operation.type": "tool", "gen_ai.tool.name": "retrieve",
   }, async () => {
-    const result = await retrieveRelatedThoughts(id);
+    const result = await retrieveRelatedThoughts(id, workspace);
     if (result) recordCandidateCount(result.length);
     return result;
   });
 }
 
-async function retrieveRelatedThoughts(id: string): Promise<RelatedThought[] | null> {
-  const source = await getEmbeddingSource(id);
+async function retrieveRelatedThoughts(id: string, workspace: string | null): Promise<RelatedThought[] | null> {
+  const source = await getEmbeddingSource(id, workspace);
   if (!source) return null;
   const model = embeddingModelName();
   if (!source.indexed || source.embeddingModel !== model || source.embeddingVersion !== EMBEDDING_RECIPE_VERSION) {
@@ -57,6 +62,8 @@ async function retrieveRelatedThoughts(id: string): Promise<RelatedThought[] | n
     FROM "Thought" current JOIN "Thought" related
       ON related.id <> current.id AND related."createdAt" < current."createdAt"
     WHERE current.id = ${id}::uuid
+      AND current."workspaceId" IS NOT DISTINCT FROM ${workspace}::text
+      AND related."workspaceId" IS NOT DISTINCT FROM ${workspace}::text
       AND related.embedding IS NOT NULL
       AND related."embeddingModel" = ${model}
       AND related."embeddingVersion" = ${EMBEDDING_RECIPE_VERSION}

@@ -7,7 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && npm run audio:verify && next build",
+    "audio:verify": "node --conditions=react-server --import tsx scripts/verify-audio.ts",
     "start": "next start",
     "lint": "eslint .",
     "test": "node --conditions=react-server --import tsx --test tests/*.test.ts",
@@ -36,6 +37,7 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@sentry/nextjs": "^11.4.0",
+    "ffmpeg-static": "^5.3.0",
     "next": "16.3.8",
     "pg": "8.23.1",
     "react": "19.3.0",

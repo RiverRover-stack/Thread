@@ -22,7 +22,7 @@ test("invalid detail IDs are rejected without querying PostgreSQL", async () => 
 test("missing thoughts return null while database failures propagate", async () => {
   const id = "bf375e93-6ff1-4cba-bcf1-574465e949ea";
   const lookup = mock.fn(async (query: unknown) => {
-    assert.deepEqual(query, { where: { id }, select: thoughtContentSelect });
+    assert.deepEqual(query, { where: { id, workspaceId: null }, select: thoughtContentSelect });
     return null;
   });
   databaseGlobal.threadPrisma = { thought: { findUnique: lookup } } as unknown as PrismaClient;

@@ -2,6 +2,8 @@ import { structureThought } from "@/lib/ai";
 import { ThoughtStructuringError } from "@/lib/ai/errors";
 import { z } from "zod";
 import { requestAccessFailure } from "@/lib/demo-access";
+import { requestWorkspace } from "@/lib/workspace";
+import { usageFailure } from "@/lib/usage";
 
 export const runtime = "nodejs";
 
@@ -43,9 +45,10 @@ export async function POST(request: Request) {
 
   try {
     // Pass the exact transcript onward. Validation must never rewrite the user's words.
-    const structuredThought = await structureThought(input.data.transcript);
+    const structuredThought = await structureThought(input.data.transcript, requestWorkspace(request.headers));
     return Response.json({ structuredThought }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    const allowance = usageFailure(error); if (allowance) return allowance;
     if (error instanceof ThoughtStructuringError) return failure(error.message, error.status);
     return failure("Thought processing failed unexpectedly. Please retry.", 500);
   }

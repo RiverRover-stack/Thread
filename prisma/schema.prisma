@@ -7,8 +7,19 @@ datasource db {
   provider = "postgresql"
 }
 
+model UsageCounter {
+  stage    String
+  scope    String
+  bucket   String
+  startsAt DateTime @db.Timestamptz(3)
+  used     Int      @default(0)
+
+  @@id([stage, scope, bucket, startsAt])
+}
+
 model Thought {
   id                String   @id @db.Uuid
+  workspaceId       String?
   rawTranscript     String
   title             String
   summary           String
@@ -22,4 +33,5 @@ model Thought {
   embeddingVersion  Int?
 
   @@index([createdAt])
+  @@index([workspaceId, createdAt])
 }

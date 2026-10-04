@@ -141,7 +141,7 @@ test("reindexing local vectors writes normalized Google vectors and metadata wit
   databaseGlobal.threadPrisma = {
     $queryRaw: async () => [source],
     $executeRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
-      assert.deepEqual(values, [JSON.stringify(normalized), model, 1, id, model, 1]);
+      assert.deepEqual(values, [JSON.stringify(normalized), model, 1, id, null, model, 1]);
       const statement = sql.join("");
       assert.doesNotMatch(statement, /SET "rawTranscript"|SET "title"|SET "summary"/);
       return 1;
@@ -161,7 +161,7 @@ test("hosted retrieval rejects a local source and searches only matching Google 
   let reads = 0;
   databaseGlobal.threadPrisma = { $queryRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
     if (++reads === 1) return [{ ...source, embeddingModel: model }];
-    assert.deepEqual(values, [id, model, 1, 0.7]);
+    assert.deepEqual(values, [id, null, null, model, 1, 0.7]);
     assert.match(sql.join(""), /related\."embeddingModel" =/);
     return [];
   } } as unknown as PrismaClient;

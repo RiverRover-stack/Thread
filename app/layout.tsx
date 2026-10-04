@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { headers } from "next/headers";
 import { accessFailure } from "@/lib/demo-access";
+import { publicDemo } from "@/lib/workspace";
 
 export const metadata: Metadata = {
   title: "Thread",
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const signedIn = Boolean(process.env.THREAD_ACCESS_PASSWORD) && !accessFailure(await headers());
+  const signedIn = !publicDemo() && Boolean(process.env.THREAD_ACCESS_PASSWORD) && !accessFailure(await headers());
   return (
     <html lang="en">
       <body>

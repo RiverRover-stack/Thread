@@ -40,13 +40,13 @@ export function chunkTranscript(transcript: string): string[] {
   return chunks;
 }
 
-export async function embedTranscript(transcript: string): Promise<number[]> {
+export async function embedTranscript(transcript: string, workspace: string | null = null): Promise<number[]> {
   // Whitespace-only chunks carry no meaning, but the original transcript stays intact.
   const chunks = chunkTranscript(transcript).filter((chunk) => chunk.trim().length > 0);
   const mean = Array<number>(EMBEDDING_DIMENSIONS).fill(0);
 
   for (const chunk of chunks) {
-    const vector = await embedText(chunk);
+    const vector = await embedText(chunk, workspace);
     for (let index = 0; index < EMBEDDING_DIMENSIONS; index += 1) {
       mean[index] += vector[index] / chunks.length;
     }

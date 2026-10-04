@@ -6,6 +6,7 @@ import RetryLoading from "@/components/thoughts/RetryLoading";
 import RelatedThoughts from "@/components/thoughts/RelatedThoughts";
 import { headers } from "next/headers";
 import { accessFailure } from "@/lib/demo-access";
+import { requestWorkspace } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function ThoughtPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   let thought: Awaited<ReturnType<typeof getThought>>;
   try {
-    thought = await getThought(id);
+    thought = await getThought(id, requestWorkspace(await headers()));
   } catch {
     return (
       <main className="mx-auto min-h-screen max-w-3xl px-6 py-12 sm:px-12">

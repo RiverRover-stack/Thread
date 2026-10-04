@@ -3,9 +3,11 @@ import { embedWithOllama } from "./ollama";
 import { embedWithGoogle } from "./google";
 import { embeddingProvider, embeddingModelName, GOOGLE_EMBEDDING_MODEL } from "./config";
 import { traceOperation } from "../observability/trace";
+import { reserveProviderCall } from "../usage";
 
-export async function embedText(text: string): Promise<number[]> {
+export async function embedText(text: string, workspace: string | null = null): Promise<number[]> {
   const selected = embeddingProvider();
+  await reserveProviderCall("embed", workspace);
   return traceOperation("embed", {
     "gen_ai.provider.name": selected,
     "gen_ai.request.model": selected === "google" ? GOOGLE_EMBEDDING_MODEL : embeddingModelName(),
