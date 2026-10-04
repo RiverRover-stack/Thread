@@ -58,6 +58,13 @@ test("production cookies are host-only, HttpOnly, Secure and Strict; local cooki
   assert.ok(!sessionCookie(createSession()).includes("Secure"));
 });
 
+test("cached browser Basic credentials cannot bypass the login page or undo cookie logout", () => {
+  const authorization = `Basic ${Buffer.from(`thread:${password}`).toString("base64")}`;
+  assert.equal(accessFailure(new Headers({ authorization })), null);
+  assert.equal(accessFailure(new Headers({ authorization, "sec-fetch-mode": "navigate" }))?.status, 401);
+  assert.equal(accessFailure(new Headers({ authorization, "sec-fetch-mode": "cors", cookie: cookieHeaders().get("cookie")! })), null);
+});
+
 test("login sets a signed session and logout clears it with uncached redirects", async () => {
   const result = await login(loginRequest());
   assert.equal(result.status, 303);

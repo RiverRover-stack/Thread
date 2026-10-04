@@ -74,6 +74,8 @@ export function accessFailure(headers: RequestHeaders): Response | null {
   const configuration = accessConfigurationFailure();
   if (configuration) return configuration;
   if (!process.env.THREAD_ACCESS_PASSWORD || validSession(headers)) return null;
+  // Browsers must use cookies: old cached Basic credentials must not undo logout.
+  if (headers.get("sec-fetch-mode")) return denied("Sign in to Thread.", 401);
   // Keep explicit Basic headers for CLI checks, without triggering browser prompts.
   const authorization = headers.get("authorization") || "";
   if (authorization.length > 4096) return denied("Sign in to Thread.", 401);
