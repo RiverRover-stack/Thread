@@ -35,7 +35,7 @@ function microphoneError(error: unknown): string {
   return "Recording could not start. Check your microphone and try again.";
 }
 
-export default function VoiceRecorder() {
+export default function VoiceRecorder({ hostedInference = false }: { hostedInference?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<Status>("idle");
   const [recording, setRecording] = useState<Recording | null>(null);
@@ -361,7 +361,7 @@ export default function VoiceRecorder() {
         Say what&apos;s on your mind. Stop when you&apos;re done, and Thread will turn it into a thought you can come back to.
       </p>
       <p className="mt-2 text-xs leading-relaxed text-stone-500">
-        Audio goes to ElevenLabs for transcription. Gemma interprets it locally. Audio playback is temporary and clears when you refresh.
+        Audio goes to ElevenLabs for transcription. {hostedInference ? "Google-hosted Gemma interprets the transcript." : "Gemma interprets the transcript locally through Ollama."} Audio playback is temporary and clears when you refresh.
       </p>
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
         <button

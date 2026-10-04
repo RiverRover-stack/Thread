@@ -28,15 +28,40 @@ async function main() {
   const health = await request("/api/health", {}, false);
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { status: "ok" });
-  for (const path of ["/", "/thoughts", "/api/process", "/api/thoughts"]) {
+  for (const path of ["/api/process", "/api/thoughts"]) {
     assert.equal((await request(path, {}, false)).status, 401, `${path} must require credentials`);
   }
+  for (const path of ["/", "/thoughts"]) {
+    const response = await request(path, {}, false);
+    assert.equal(response.status, 307);
+    assert.equal(new URL(response.headers.get("location"), target).pathname, "/login");
+  }
+  assert.equal((await request("/login", {}, false)).status, 200);
+  assert.equal((await request("/api/process", {}, false)).headers.get("www-authenticate"), null);
+  const signIn = (password) => request("/api/auth/login", {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", origin: target.origin },
+    body: new URLSearchParams({ password }),
+  }, false);
+  const wrong = await signIn("synthetic-wrong-password");
+  assert.equal(wrong.status, 303);
+  assert.equal(wrong.headers.get("set-cookie"), null);
+  const signedIn = await signIn(process.env.THREAD_ACCESS_PASSWORD);
+  assert.equal(signedIn.status, 303);
+  const session = signedIn.headers.get("set-cookie");
+  for (const attribute of ["HttpOnly", "Secure", "SameSite=Strict"]) assert.ok(session?.includes(attribute));
+  const cookie = session.split(";")[0];
+  assert.equal((await request("/thoughts", { headers: { cookie } }, false)).status, 200);
+  assert.equal((await request("/api/process", { method: "POST", headers: { cookie, origin: target.origin } }, false)).status, 415);
+  assert.equal((await request("/api/process", { method: "POST", headers: { cookie, origin: "https://unrelated.example" } }, false)).status, 403);
+  const signedOut = await request("/api/auth/logout", { method: "POST", headers: { cookie, origin: target.origin } }, false);
+  assert.equal(signedOut.status, 303);
+  assert.ok(signedOut.headers.get("set-cookie")?.includes("Max-Age=0"));
   assert.equal((await request("/api/process", {
     method: "POST", headers: { origin: "https://unrelated.example" },
   })).status, 403);
   assert.equal((await request("/api/process", { method: "POST" })).status, 415);
   assert.equal((await request("/thoughts")).status, 200);
-  console.log("HTTPS health, shared-password gate, authenticated page, payload validation, and cross-site rejection passed.");
+  console.log("HTTPS health, login/logout session, shared-password gate, authenticated page/API, and cross-site rejection passed.");
   if (!process.argv.includes("--write-synthetic")) return;
 
   // This mode persists three synthetic fixtures and consumes hosted-model quota.

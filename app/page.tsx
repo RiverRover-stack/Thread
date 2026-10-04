@@ -21,7 +21,7 @@ export default async function Home() {
       <p className="mt-6 max-w-lg text-lg leading-relaxed text-stone-600">
         A place for the ideas that arrive before you have the words in order.
       </p>
-      <VoiceRecorder />
+      <VoiceRecorder hostedInference={process.env.AI_PROVIDER === "google"} />
       <div className="mt-6"><Link href="/thoughts" className="inline-flex min-h-11 items-center rounded font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-4">View your timeline</Link></div>
       <Suspense fallback={<TimelineLoading />}>
         <ThoughtTimeline />

@@ -51,17 +51,22 @@ test("validates username and password, rejects malformed credentials and does no
     const failure = accessFailure(new Headers({ authorization: value }));
     assert.equal(failure?.status, 401);
     assert.equal(failure?.headers.get("cache-control"), "no-store");
-    assert.match(failure?.headers.get("www-authenticate") || "", /^Basic realm="Thread"/);
+    assert.equal(failure?.headers.get("www-authenticate"), null);
     assert.ok(!(await failure?.text())?.includes(password));
   }
 });
 
-test("only exact health GET and HEAD bypass protection; routes and alternate representations require credentials", () => {
+test("exact health bypasses the gate; protected pages redirect and APIs/data representations reject access", () => {
   for (const method of ["GET", "HEAD"]) {
     assert.equal(proxy(new NextRequest("https://thread.example/api/health", { method })).headers.get("x-middleware-next"), "1");
   }
-  for (const path of ["/", "/thoughts", "/thoughts/id", "/api/process", "/api/health/extra", "/thoughts/id.json", "/_next/data/build/thoughts.json"]) {
+  for (const path of ["/api/process", "/api/health/extra", "/_next/data/build/thoughts.json"]) {
     assert.equal(proxy(new NextRequest(`https://thread.example${path}`)).status, 401);
+  }
+  for (const path of ["/", "/thoughts", "/thoughts/id", "/thoughts/id.json"]) {
+    const result = proxy(new NextRequest(`https://thread.example${path}`));
+    assert.equal(result.status, 307);
+    assert.equal(result.headers.get("location"), "https://thread.example/login");
   }
   assert.equal(proxy(new NextRequest("https://thread.example/api/health", { method: "POST" })).status, 401);
   assert.equal(proxy(new NextRequest("https://thread.example/thoughts", { headers: { authorization } })).headers.get("x-middleware-next"), "1");
