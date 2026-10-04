@@ -1,5 +1,8 @@
 import { performance } from "node:perf_hooks";
+import { loadEnvConfig } from "@next/env";
 import { structureThought } from "../lib/ai";
+
+loadEnvConfig(process.cwd());
 
 const cases = [
   "I keep forgetting to email Maya about the hackathon demo. Maybe tomorrow morning I should send her the updated link, and I wonder if we should shorten the intro.",
@@ -19,4 +22,3 @@ async function main() {
 }
 
 void main();
-

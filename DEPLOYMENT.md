@@ -1,22 +1,27 @@
 # Thread deployment — Phase 5
 
-Milestone 1 prepares deployment configuration. Nothing has been provisioned or
-published. Milestones 2–4 connect dependencies, deploy and verify, then prepare
-the demo. Stop for verification after each milestone.
+Milestone 1 prepares deployment configuration. Milestone 2 now implements
+switchable local/hosted Gemma reasoning. Nothing has been provisioned or published.
+Hosted embeddings and a separate production database are now configured in the
+code/template. Resource creation, restricted access, and live API validation
+are still pending. Stop for verification after each milestone.
 
 ## Decisions before publishing
 
-- Inference hosting: current adapters use Ollama's `/api/chat` and `/api/embed`.
-  `127.0.0.1` on Render refers to Render's instance, not your Windows PC.
-  Choose a reachable, appropriately protected inference host or approve a hosted
-  provider adapter. Current code has no inference authentication header support.
-  Do not expose your local Ollama server publicly to make this work.
+- Reasoning hosting is agreed: use Google AI Studio's hosted Gemma API on Render
+  and retain Ollama for local PC inference. `AI_PROVIDER` chooses the reasoning
+  adapter. Embeddings are agreed too: Google `gemini-embedding-2` on Render,
+  local EmbeddingGemma by default on the PC. `127.0.0.1` on Render refers to
+  Render's instance, not your Windows PC. No public Ollama host is needed.
 - Access: there is one shared timeline with no user authentication. Anyone with
   access can read thoughts and invoke billable transcription. Agree on restricted
   access before using personal thoughts. Synthetic examples are suitable for a demo.
-- Database and budget: choose PostgreSQL with pgvector and the service region.
-  The template defines a free web service and provisions no database or model host.
-  Check current limits before deciding whether this is adequate for the demo.
+- Database: the template defines a separate Render PostgreSQL instance named
+  `thread-production-db`, database `thread_production`, and injects its internal
+  connection URL into the web service. Local `.env.local` stays unchanged.
+  Both resources use Render's default region. Public database connections are
+  blocked. The free Postgres plan expires after 30 days and has no backups; use
+  a paid plan for ongoing personal use. See [free-service limits](https://render.com/docs/free).
 
 Sentry and Backboard remain optional. Existing PostgreSQL retrieval stays in place.
 
@@ -24,13 +29,21 @@ Sentry and Backboard remain optional. Existing PostgreSQL retrieval stays in pla
 
 | File | Responsibility |
 | --- | --- |
-| `render.yaml` | Web runtime, commands, health path, and environment variable names |
+| `render.yaml` | Web runtime, commands, health path, and a separate production database |
 | `app/api/health/route.ts` | Uncached HTTP liveness response with no dependency calls |
 | `.env.example` | Local settings and production configuration guidance, without secrets |
 | `package.json` | Existing build, start, migration, and verification commands |
 | `prisma/migrations/` | Committed schema changes, including enabling pgvector |
 | `lib/ai/ollama.ts` | Gemma structuring and connection requests |
+| `lib/ai/google.ts` | Hosted Gemma HTTP requests, safe errors, and validated model output |
+| `lib/ai/index.ts` | Provider selection and projection of at most five related thoughts |
+| `lib/ai/prompts.ts` | Shared meaning-preservation and connection rules |
+| `tests/google-ai.test.ts` | Mocked provider selection, requests, output validation, and failure checks |
 | `lib/embeddings/ollama.ts` | EmbeddingGemma requests |
+| `lib/embeddings/google.ts` | Hosted embedding request and validation of 768 finite, nonzero numbers |
+| `lib/embeddings/config.ts` | Independent provider selection and compatible-vector metadata |
+| `scripts/check-semantic-memory.mjs` | Read-only database check and selected-provider embedding check |
+| `tests/google-embeddings.test.ts` | Hosted request/errors, normalization, reindexing, and retrieval compatibility tests |
 
 ## Runtime configuration
 
@@ -41,12 +54,16 @@ database/provider secrets with a `NEXT_PUBLIC_` prefix.
 | --- | --- |
 | `NODE_VERSION` | `22.13.0`, matching the locally verified runtime |
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | Production PostgreSQL connection URL; use Render's internal URL when colocated |
+| `DATABASE_URL` | Automatically supplied from the separate production database by the Blueprint |
 | `ELEVENLABS_API_KEY` | Server-side key with speech-to-text access |
-| `OLLAMA_BASE_URL` | Reachable Ollama-compatible API base URL; decision pending |
-| `OLLAMA_MODEL` | `gemma3:4b`, installed on the chosen inference host |
-| `OLLAMA_EMBEDDING_MODEL` | `embeddinggemma:300m`, installed on that host |
-| `RELATED_THOUGHTS_MIN_SIMILARITY` | `0.70`, matching the existing retrieval threshold |
+| `AI_PROVIDER` | `google` for Render, `ollama` for local PC; defaults to `ollama` |
+| `GEMINI_API_KEY` | Server-side Google AI Studio API key, required for `google` |
+| `GOOGLE_GEMMA_MODEL` | `gemma-4-26b-a4b-it` (default) or `gemma-4-31b-it` |
+| `EMBEDDING_PROVIDER` | `google` for Render, `ollama` for local PC; independent of `AI_PROVIDER` |
+| `OLLAMA_BASE_URL` | Local Ollama URL; not required when both providers are Google |
+| `OLLAMA_MODEL` | `gemma3:4b`; used only for Ollama reasoning |
+| `OLLAMA_EMBEDDING_MODEL` | `embeddinggemma:300m`; independent of reasoning provider |
+| `RELATED_THOUGHTS_MIN_SIMILARITY` | Render starts at `0.80`; local defaults remain `0.70`; evaluate real examples |
 
 Keep the embedding model and recipe consistent with stored vectors. A different
 embedding model is a semantic-memory change requiring evaluation and reindexing,
@@ -57,6 +74,119 @@ Do not hardcode a production port. `sync: false` prompts for values on initial
 Blueprint creation; later secret changes must be made in the service environment.
 Automatic redeploys are disabled. Creating a Blueprint still starts an initial
 deploy, so wait until the decisions above are resolved before creating it.
+
+## Switch local and hosted reasoning
+
+For local PC inference, put this in `.env.local` and restart Next.js:
+
+```text
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=gemma3:4b
+```
+
+For hosted reasoning, set these server-side values in `.env.local` or Render:
+
+```text
+AI_PROVIDER=google
+GEMINI_API_KEY=<your Google AI Studio key>
+GOOGLE_GEMMA_MODEL=gemma-4-26b-a4b-it
+```
+
+Create the key in [Google AI Studio](https://aistudio.google.com/apikey); enter it
+locally or in Render, not in chat. The Render template selects `google` and prompts
+for the key. Local configuration defaults to Ollama even if a Google key is present.
+Unsupported providers/models and missing keys fail explicitly. There are no automatic
+retries, provider fallbacks, Gemini substitutions, or new SDK dependencies.
+
+Data flow: `/api/process` → `structureThought` → selected Gemma adapter → Zod →
+existing HTTP response → save. Connections use the same selection and send only
+structured fields from the current thought and at most five earlier thoughts.
+Raw transcript storage and the client/server response contract are unchanged.
+
+Google currently documents hosted Gemma 4 models with free API input/output,
+subject to project quotas. Free-tier content is used to improve Google's products;
+review that policy before processing personal thoughts. Hosted reasoning sends
+transcripts or selected interpretations to Google, whereas local reasoning stays
+on the configured Ollama host. See [Gemma API capabilities](https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api)
+and [pricing and data use](https://ai.google.dev/gemini-api/docs/pricing).
+
+Both providers use the same instructions. The Google adapter sends the JSON schema
+as prompt guidance and independently validates output with Zod; it does not assume
+Gemma supports constrained JSON generation. It accepts a complete JSON object or
+one complete JSON code block and rejects prose, incomplete responses, and invalid
+fields. Internal thinking parts are excluded. Thinking is set to `minimal` for
+these short tasks. Switching providers preserves contracts, not identical model
+quality, so evaluate both.
+
+With hosted settings configured, run `npm run ai:eval` for four synthetic transcripts.
+This calls the real selected model and prints synthetic input/output for review.
+Check meaning, explicit actions, and questions. `npm test` uses mocks and never
+establishes key access, real quota, or model quality. The existing
+`connections:eval` also calls the selected reasoning provider but its integration
+stage needs PostgreSQL and the independently configured embeddings.
+
+## Hosted embeddings and database separation
+
+The Render template selects `EMBEDDING_PROVIDER=google`. It calls
+`gemini-embedding-2:embedContent` using the same server-side `GEMINI_API_KEY` as
+hosted reasoning and requests 768 dimensions. Local `.env.example` defaults to
+`EMBEDDING_PROVIDER=ollama`. Reasoning and embedding settings are independent;
+changing `AI_PROVIDER` alone never changes the embedding model.
+
+When testing hosted embeddings outside Render, also set
+`RELATED_THOUGHTS_MIN_SIMILARITY=0.80` in that test process. The generic application
+default remains 0.70 for local compatibility; the Blueprint explicitly supplies
+the hosted starting point. A live synthetic pair scored 0.8545 for related text
+and 0.7012 for unrelated text, so 0.70 admitted that unrelated example. A 0.80
+starting point separates these examples but needs broader real-world evaluation.
+
+Data flow: saved raw transcript → existing bounded chunks → selected embedding
+adapter → vector validation → mean and normalization → PostgreSQL. The hosted
+adapter applies Google's semantic-similarity prefix consistently to every chunk.
+It preserves the input text and never asks Gemma to invent an embedding. See
+[Google's embedding API](https://ai.google.dev/gemini-api/docs/embeddings).
+
+Google vectors use metadata `google:gemini-embedding-2`; local vectors retain
+`embeddinggemma:300m` or your configured local model name. Existing retrieval
+filters by that metadata and recipe version. The database column remains
+`vector(768)` and no schema migration is added. Model changes require fresh
+vectors even when dimensionality is unchanged. Provider failures do not overwrite
+thought text or fall back to incompatible local vectors.
+
+Use separate environments:
+
+| Environment | Database | Reasoning | Embeddings |
+| --- | --- | --- | --- |
+| Local PC | Existing local URL in `.env.local` | Ollama by default; Google optional | EmbeddingGemma by default |
+| Render | Internal URL of `thread-production-db` | Hosted Gemma | Google hosted embeddings |
+
+Do not copy `.env.local` to Render, replace its URL with the production URL, or
+import local thoughts automatically. A new production database starts empty.
+Creating the Blueprint creates the database and starts the initial app deploy;
+the repository configuration alone does neither. If creating services manually,
+use a distinct production database and its internal URL, not the local URL.
+
+For a database that already contains vectors from another model, configure the
+selected embedding provider and run `npm run embeddings:backfill` only in the
+intended environment. It regenerates mismatched vectors from preserved transcripts,
+retains IDs/content/timestamps, and can resume after failure. The single stored
+vector is replaced; switching back in that same database requires another backfill.
+Until backfill finishes, incompatible earlier thoughts are excluded from retrieval.
+No backfill is needed on an empty production database.
+
+Google's free embedding tier has quotas and its data-use policy applies to the
+transcript chunks sent there. Backfill can consume quota quickly; do not run it
+against your local private history just to test production configuration.
+
+With the key configured, run `npm run memory:check:embedding` or
+`npm run embeddings:eval` for synthetic provider checks. Use `npm run memory:eval`
+in the intended database for the existing relevance cases and threshold review.
+These commands load local settings unless run in an environment with explicitly
+supplied production settings. A trusted process within Render's private network
+is needed for CLI database checks because public database access is blocked.
+On the free web service, use migration logs and the deployed capture/detail flow
+for verification; Render's interactive shell requires paid compute.
 
 ## Build, migration, and startup
 
@@ -111,8 +241,8 @@ The endpoint only proves Next.js can answer HTTP requests. A successful probe do
 not establish database, transcription, or model readiness. It reveals no secrets
 and does not execute expensive inference on every platform health check.
 
-Once dependencies are agreed and configured, Milestone 2 will apply migrations
-and run `db:check` and `memory:check` against the intended database and model host.
+Once resources and credentials are configured, Milestone 2 will validate migrations,
+database access, hosted inference, and retrieval in the intended environment.
 These CLI scripts load `.env.local`, so confirm the target before running them;
 local success does not validate a Render service's configuration.
 
@@ -129,8 +259,15 @@ claimed by Milestone 1.
 - Health failure: inspect process startup and port binding. A database error on the
   timeline is a separate failure from this liveness check.
 - Inference failure: inspect the affected route's HTTP status, configured host,
-  installed model, and provider reachability. Local Ollama instructions in current
-  error messages are another item to review when production hosting is chosen.
+  selected provider, and reachability. For Google, start at `lib/ai/google.ts`,
+  server key/model settings, and AI Studio quotas. A 429 means quota exhaustion;
+  503 means configuration or connectivity trouble, 504 a timeout, and 502 an
+  invalid/incomplete response or upstream failure. For Ollama, check the local
+  server and installed model. Hosted selection does not change embedding errors.
+- Embedding failure: start in `lib/embeddings/google.ts` and `config.ts`, check the
+  server key and quotas. An empty related list after a provider switch may mean
+  earlier thoughts still need reindexing. Inspect model/version metadata before
+  changing similarity thresholds.
 - Bad application deploy: redeploy the previous known-good application revision.
   This does not undo applied database migrations; review compatibility first.
 
@@ -141,6 +278,15 @@ one fixed `service` property to the response. This practices editing an existing
 TypeScript object. Follow the two hints there and repeat the health request to
 verify both fields. The endpoint works before you attempt the exercise.
 
+In `lib/ai/index.ts`, predict the selected provider with `AI_PROVIDER` unset,
+`ollama`, and `google`, then record the cases here in your own words. The comments
+give two hints and the provider-switch test is your verification. This practices
+reading a default value and an equality comparison without changing working logic.
+
+In `tests/google-embeddings.test.ts`, add a tab-only string to the invalid-input
+cases. The two hints explain the string escape and array edit; run `npm test` to
+confirm it is rejected before any provider call.
+
 ## Milestone 1 validation record
 
 Verified locally on 4 October 2026 with Node.js 22.13.0: all 62 tests, ESLint,
@@ -149,6 +295,28 @@ the running production server's `/api/health` returned the expected JSON, status
 200 and `Cache-Control: no-store`. The test server was stopped afterward.
 The Blueprint parses as YAML; Render's server-side Blueprint validation and a
 clean Render build remain unverified. No production migrations were applied.
+
+## Milestone 2 adapter validation record
+
+Verified locally on 4 October 2026: 69 mocked tests, ESLint, TypeScript, and the
+production build pass. A production HTTP smoke check with `AI_PROVIDER=google`
+confirmed that `/api/process` selects the hosted adapter and returns a safe,
+uncached 503 when the Google key is missing; `/api/health` still returns 200.
+Hosted embeddings were subsequently implemented and verified with mocked provider,
+normalization, metadata/reindexing, and retrieval compatibility tests. The Blueprint
+parses and its production database reference is verified. The readiness CLI now
+uses the shared adapter; its missing-key failure was checked in a separate process.
+Local `.env.local` was not edited and no database migrations or backfill were run.
+After the key became available, hosted Gemma successfully structured all four
+synthetic evaluation cases, preserving stated action timing and uncertainty and
+leaving the reflective case non-actionable. Google embeddings returned valid
+768-dimensional vectors, ranked the related pair above the unrelated pair, and
+processed a long transcript in three chunks with a normalized final vector.
+Live provider checks used process-scoped settings; local environment files were
+not edited. Final checks: 77 tests, ESLint, TypeScript, and the production build
+pass. No production resources have been created by these repository changes.
+Milestone 2 is not complete until production database connectivity, deployed
+retrieval quality, and the access decision are resolved.
 
 ## References
 

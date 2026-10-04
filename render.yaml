@@ -1,5 +1,5 @@
-# Deployment preparation only. Resolve inference hosting and access before publishing.
-# This creates only the Next.js service; choose the database separately.
+# Deployment preparation only. Resolve application access before publishing.
+# Local development keeps its existing database; this defines a separate Render DB.
 services:
   - type: web
     name: thread
@@ -16,14 +16,27 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: thread-production-db
+          property: connectionString
       - key: ELEVENLABS_API_KEY
         sync: false
-      - key: OLLAMA_BASE_URL
+      - key: AI_PROVIDER
+        value: google
+      - key: GEMINI_API_KEY
         sync: false
-      - key: OLLAMA_MODEL
-        value: gemma3:4b
-      - key: OLLAMA_EMBEDDING_MODEL
-        value: embeddinggemma:300m
+      - key: GOOGLE_GEMMA_MODEL
+        value: gemma-4-26b-a4b-it
+      - key: EMBEDDING_PROVIDER
+        value: google
       - key: RELATED_THOUGHTS_MIN_SIMILARITY
-        value: "0.70"
+        # Preliminary hosted-model threshold from synthetic ranking; evaluate real cases.
+        value: "0.80"
+
+databases:
+  - name: thread-production-db
+    databaseName: thread_production
+    plan: free
+    # Block public database connections; the web service uses Render's internal URL.
+    ipAllowList: []
+    # Free Render Postgres expires after 30 days. Choose a paid plan for ongoing use.

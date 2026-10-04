@@ -1,11 +1,18 @@
 import nextEnv from "@next/env";
 import pg from "pg";
+import { createRequire } from "node:module";
+
+// tsx registers TypeScript require hooks; use one module format for shared classes.
+const require = createRequire(import.meta.url);
+const { embedText } = require("../lib/embeddings/index.ts");
+const { embeddingModelName } = require("../lib/embeddings/config.ts");
+const { EmbeddingError } = require("../lib/embeddings/errors.ts");
 
 nextEnv.loadEnvConfig(process.cwd());
 
 const flags = process.argv.slice(2);
 if (flags.some((flag) => !["--database", "--embedding"].includes(flag))) {
-  console.error("Usage: node scripts/check-semantic-memory.mjs [--database | --embedding]");
+  console.error("Usage: npm run memory:check -- [--database | --embedding]");
   process.exit(1);
 }
 
@@ -57,46 +64,19 @@ async function checkDatabase() {
 }
 
 async function checkEmbedding() {
-  const baseUrl = (process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434").replace(/\/$/, "");
-  const model = process.env.OLLAMA_EMBEDDING_MODEL?.trim() || "embeddinggemma:300m";
   try {
-    const response = await fetch(`${baseUrl}/api/embed`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        input: `task: sentence similarity | query: ${sampleText}`,
-        dimensions: EXPECTED_DIMENSIONS,
-        truncate: false,
-        keep_alive: "5m",
-      }),
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!response.ok) {
-      console.error(response.status === 404
-        ? "Embedding: model missing. Run ollama pull embeddinggemma:300m, or check OLLAMA_EMBEDDING_MODEL."
-        : `Embedding: Ollama returned HTTP ${response.status}. Check local model configuration.`);
-      return false;
-    }
-    const result = await response.json();
-    const vectors = result?.embeddings;
-    const vector = Array.isArray(vectors) && vectors.length === 1 ? vectors[0] : null;
-    if (!Array.isArray(vector) || vector.length !== EXPECTED_DIMENSIONS
-      || !vector.every((value) => typeof value === "number" && Number.isFinite(value))
-      || !vector.some((value) => value !== 0)) {
-      console.error("Embedding: expected one nonzero vector containing 768 finite numbers.");
-      return false;
-    }
-    console.log("Embedding: local model returned one valid 768-dimensional vector. No transcript or vector logged or saved.");
+    // Use the application's adapter so readiness checks validate the selected provider.
+    const vector = await embedText(sampleText);
+    if (vector.length !== EXPECTED_DIMENSIONS) throw new Error("INVALID_DIMENSIONS");
+    console.log(`Embedding: ${embeddingModelName()} returned one valid 768-dimensional vector. No transcript or vector logged or saved.`);
     return true;
   } catch (error) {
-    console.error(error?.name === "TimeoutError" || error?.name === "AbortError"
-      ? "Embedding: inference timed out. Keep Ollama running and retry; the first model load can be slower."
-      : "Embedding: could not obtain a valid response. Check Ollama and OLLAMA_BASE_URL, then retry.");
+    console.error(error instanceof EmbeddingError
+      ? `Embedding: ${error.message}`
+      : "Embedding: readiness check failed. Check the selected provider configuration.");
     return false;
   }
 }
-
 async function main() {
   let ready = true;
   if (!flags.length || flags.includes("--database")) ready = await checkDatabase() && ready;

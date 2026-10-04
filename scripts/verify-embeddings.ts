@@ -35,6 +35,6 @@ async function main() {
 }
 
 void main().catch(() => {
-  console.error("Embedding persistence verification failed. Check PostgreSQL, migrations, and Ollama.");
+  console.error("Embedding persistence verification failed. Check PostgreSQL, migrations, and the selected embedding provider.");
   process.exitCode = 1;
 });

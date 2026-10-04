@@ -37,6 +37,6 @@ async function main() {
 }
 
 void main().catch(() => {
-  console.error("Embedding backfill failed. Check PostgreSQL, migrations, and Ollama, then rerun to resume.");
+  console.error("Embedding backfill failed. Check PostgreSQL, migrations, and the selected embedding provider, then rerun to resume.");
   process.exitCode = 1;
 });

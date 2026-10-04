@@ -9,7 +9,7 @@ stored in PostgreSQL using pgvector, and searched for relevant earlier thoughts.
 The detail page prepares missing embeddings and displays related thought cards.
 The Next.js homepage captures microphone audio, provides
 local playback, and sends the recording to ElevenLabs for transcription after
-stopping. It then sends the raw transcript to a local Gemma model through Ollama
+stopping. It then sends the raw transcript to the selected Gemma model
 and validates the structured thought with Zod. It automatically saves the original
 transcript and interpretation to PostgreSQL. The homepage and `/thoughts` display
 saved thoughts newest first. Each title opens a saved detail page with the original
@@ -25,7 +25,13 @@ For a diagram-led implementation walkthrough, see
 
 Phase 5 deployment preparation is documented in [DEPLOYMENT.md](DEPLOYMENT.md).
 The root `render.yaml` defines the web service; `/api/health` checks HTTP liveness.
-Production inference hosting and access restrictions still need to be decided.
+Reasoning supports local Ollama or Google AI Studio's hosted Gemma API via
+`AI_PROVIDER=ollama|google`. Hosted mode requires the server-side `GEMINI_API_KEY`;
+local mode remains the default. See the deployment guide for model settings and
+data handling. Embeddings independently support `EMBEDDING_PROVIDER=ollama|google`.
+Render selects hosted reasoning/embeddings and its own PostgreSQL database; local
+development keeps its existing database and local defaults. Access restrictions
+and live production validation remain pending.
 
 Use Node.js 22.12+ on the 22.x line, or Node.js 24+ (matching package.json).
 
