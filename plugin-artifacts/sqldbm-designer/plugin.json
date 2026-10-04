@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "sqldbm-designer",
+  "version": "0.1.0",
+  "description": "Create and revise SqlDBM database models through its official MCP server, and export retrieved designs using the host's file tools.",
+  "author": { "name": "Personal tools" },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "SqlDBM Designer",
+        "shortDescription": "Design and export SQL models",
+        "longDescription": "Connect to SqlDBM with OAuth to inspect models and create projects or revisions. Export SQL and model JSON through available host file tools. Requires SqlDBM MCP access and separate write permission. Local saves require a host with filesystem access; cloud downloads require file-generation support. Independent integration, not an official SqlDBM plugin.",
+        "developerName": "Personal tools",
+        "category": "Productivity",
+        "defaultPrompt": "Help me inspect, create, or edit a SqlDBM database design and export it to my PC."
+      }
+    }
+  }
+}
