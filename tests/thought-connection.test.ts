@@ -58,10 +58,6 @@ test("rejects blank or oversized text and accepts exact length limits", () => {
     const limit = field === "questionToExplore" ? 300 : 600;
     const atLimit = field === "questionToExplore" ? "x".repeat(limit - 1) + "?" : "x".repeat(limit);
     assert.equal(thoughtConnectionSchema.safeParse({ ...connected, [field]: atLimit }).success, true);
-    // CHALLENGE: Verify that a line break alone also counts as blank model output.
-    // TODO(you): Add "\n" to the invalidText array below (the escape means a newline).
-    // Hint 1: Copy the existing "   " case. Hint 2: trim() removes whitespace before
-    // min(1) checks length. Verify: npm test still passes with your new case.
     for (const invalidText of ["", "   ", "x" + atLimit]) {
       assert.equal(thoughtConnectionSchema.safeParse({ ...connected, [field]: invalidText }).success, false);
     }
