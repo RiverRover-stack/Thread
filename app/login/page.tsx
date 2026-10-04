@@ -21,9 +21,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           aria-describedby={message ? "login-error" : undefined}
           className="mt-2 min-h-12 w-full rounded-lg border border-stone-300 px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800" />
         {message && <p id="login-error" role="alert" className="mt-3 text-sm text-red-800">{message}</p>}
-        {/* CHALLENGE: personalize this button's text, without changing its submit behavior.
-            TODO(you): edit only the words below. Hint 1: text sits between tags.
-            Hint 2: keep type="submit". Verify: the new label appears and login still works. */}
         <button type="submit" className="mt-5 min-h-12 w-full rounded-lg bg-emerald-900 px-4 py-3 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800">Sign in</button>
       </form>
       <p className="mt-4 text-sm text-stone-500">Your session lasts eight hours. Sign out when you’re finished.</p>

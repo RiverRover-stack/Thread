@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { StructuredThought } from "@/lib/ai/schemas";
-import DemoUsage from "./DemoUsage";
 
 type Status = "idle" | "requesting" | "recording" | "stopping" | "transcribing" | "structuring" | "saving";
 type Recording = { blob: Blob; url: string };
@@ -369,12 +368,11 @@ export default function VoiceRecorder({ hostedInference = false, publicDemo = fa
   return (
     <section aria-labelledby="capture-heading" className="mt-10 min-w-0 rounded-2xl border border-stone-300 bg-white p-6 sm:p-8">
       <h2 id="capture-heading" className="text-xl font-semibold">Capture a thought</h2>
-      {publicDemo && <DemoUsage refreshKey={status} />}
       <p className="mt-2 text-sm leading-relaxed text-stone-600">
         Say what&apos;s on your mind. Stop when you&apos;re done, and Thread will turn it into a thought you can come back to.
       </p>
       <p className="mt-2 text-xs leading-relaxed text-stone-500">
-        Audio goes to ElevenLabs for transcription. {hostedInference ? "Google-hosted Gemma interprets the transcript." : "Gemma interprets the transcript locally through Ollama."} Audio playback is temporary and clears when you refresh.
+    Audio playback is temporary and clears when you refresh.
       </p>
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
         <button
