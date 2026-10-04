@@ -1,7 +1,10 @@
 # Thread deployment — Phase 5
 
 Deployment configuration, hosted adapters, and the approved shared-password gate
-are committed. Production resource setup and deployed verification are in progress.
+are committed. Thread is deployed at https://thread-e5b3.onrender.com with a
+separate production database. Automated deployed checks and embedded-browser
+login/logout pass. The earlier browser authentication error is resolved by the
+normal login page. Microphone capture remains a manual verification step.
 Stop for verification after each milestone.
 
 ## Decisions before publishing
@@ -80,20 +83,31 @@ deploy, so wait until the decisions above are resolved before creating it.
 
 ## Shared access
 
-Open the deployed HTTPS URL and use username `thread` in the browser sign-in
-prompt. Obtain `THREAD_ACCESS_PASSWORD` from the service's Render Environment
+Open the deployed HTTPS URL and enter the shared password at `/login`.
+Obtain `THREAD_ACCESS_PASSWORD` from the service's Render Environment
 page and share it privately with demo participants. The Blueprint generates it;
 manual service creation must supply a strong random value before deployment.
 Production fails closed with HTTP 503 if the password is missing or invalid.
 Local development stays open unless you explicitly set the password.
 
-This is HTTP Basic authentication: the browser sends credentials on each request
-over HTTPS and may cache them until its session closes. Use a private window for
-the demo; close that window afterward. Rotate the server password to revoke
-everyone's access. This is shared access, with no individual accounts or isolated
-timelines. Valid credentials are checked in the proxy and again before pages
-query the database or API handlers call providers. Authenticated cross-site browser
-writes are rejected because browsers can attach cached Basic credentials.
+The login form sends the password over HTTPS to `/api/auth/login`. A valid login
+sets an eight-hour HMAC-signed cookie with HttpOnly, Secure and SameSite=Strict.
+The cookie contains an expiry and random nonce, never the password. The server
+validates its signature on every request. Sign out clears the browser's cookie;
+rotating the shared password invalidates all existing cookies. This remains shared
+access, with no individual accounts or isolated timelines. Explicit Basic headers
+still work for trusted CLI checks, but responses do not trigger browser password
+prompts. The proxy and pages/API handlers check access independently. Login and
+cookie-authenticated writes require a matching HTTPS Origin in production.
+
+Login implementation: `app/login/page.tsx` owns the form and error presentation;
+`app/api/auth/login/route.ts` validates bounded form input and sets the cookie;
+`app/api/auth/logout/route.ts` clears it; `lib/demo-access.ts` signs and validates
+sessions; `proxy.ts` redirects protected pages while APIs retain JSON errors.
+`app/layout.tsx` shows Sign out only for authenticated access. Static Next build
+assets and the login page are public; thought data remains protected.
+The login button's CHALLENGE comment is a small text-edit exercise: change only
+its visible words, retain `type="submit"`, then verify sign-in still works.
 
 ## Switch local and hosted reasoning
 
@@ -296,6 +310,59 @@ health and an authenticated page, 415 for an authenticated invalid payload, and
 403 for an authenticated cross-site write. Tests also cover production fail-closed
 configuration and independent API checks when the proxy is bypassed. The hosted
 adapter revision is `2acea21`; the gate revision is `9e034a2`.
+
+## Live deployment record — 4 October 2026
+
+- Web service: `srv-db13h29srm7s739svl1g`, free Node service in Oregon,
+  [Thread](https://thread-e5b3.onrender.com), automatic deploys disabled.
+- Production PostgreSQL: `dpg-db13767avr4c73a22g5g-a`, PostgreSQL 17 in Oregon,
+  database name `thread_production_db`, public connections blocked.
+- Resources were created directly through the Render connector. The committed
+  Blueprint remains a provisioning template; it was not applied to these resources.
+  Its explicit database name is `thread_production`, while the connector generated
+  `thread_production_db`. Do not apply the template as a second stack accidentally.
+- Server-side keys and the internal database URL are configured in Render.
+  The demo password is also in the ignored local `.env.render` file; username
+  `thread`. Local `.env.local` and the local database were not changed.
+- The initial deployment of `dc58da5` built successfully, applied both committed
+  migrations (including pgvector), and bound Next.js to `0.0.0.0:10000`.
+  Render's HTTP health path is `/api/health`.
+- HTTPS verification passed for health, unauthorized pages/APIs, authenticated
+  access, invalid payload handling, and cross-site write rejection.
+- Three synthetic thoughts were structured by hosted Gemma, saved, and indexed
+  with hosted Google embeddings. Save retries preserved the same ID/content;
+  embedding retries reused the stored compatible vector. The benchmark pair
+  matched at similarity 0.8545; the weather example was excluded. Hosted Gemma
+  produced a connection explanation and implication. The first thought returned
+  no connection, as expected with no earlier candidates.
+- A locally generated synthetic WAV passed through the deployed transcription
+  endpoint and ElevenLabs returned the expected sentence about learning APIs by
+  building one tiny request. This verifies actual provider access, not microphone
+  permissions or browser recording. A recent error-log query returned no errors.
+- A second deployment of the same revision completed successfully and started a
+  new app instance. All three synthetic thoughts and their compatible embeddings
+  persisted; vector retries reused them. Health, access-control checks, and
+  first-thought abstention passed again after the restart.
+
+The three synthetic fixtures remain in the production timeline for review:
+`a9f652a8-6d7a-4f7f-948e-1145a62fb795`,
+`208bc2d4-1f4b-4580-a8b7-d06393ab8e53`, and
+`bd33b797-872f-4e8d-a240-b70390433b51`.
+The free production database expires on **3 November 2026**. Upgrade or export
+before then if the project needs to keep its production data.
+
+Manual capture check: open the HTTPS app, sign in, allow microphone access,
+record a short synthetic thought, stop, review its transcript and interpretation,
+save it, then open its detail page and prepare/analyze semantic memory. Inspect
+the browser Network panel for failed API requests and Render logs for server errors.
+
+Login update verified: revision `666e289` is live. All 90 tests, lint and production
+build pass. The HTTPS verification command confirms wrong-password rejection,
+cookie flags, protected-page redirects, independent API protection, login/logout,
+cross-site rejection, and explicit CLI compatibility. Login and logout were also
+performed successfully in the Codex in-app browser. Existing production thoughts
+and compatible embeddings were verified after this deployment. The source changes
+are committed and pushed; these deployment notes remain local.
 
 ## Debugging and recovery
 
