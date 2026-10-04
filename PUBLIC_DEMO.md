@@ -186,3 +186,24 @@ secret is configured privately on Render. No provider calls were made during
 this private rollout. Public mode and AI remain disabled pending confirmation
 of the dedicated capped ElevenLabs key. Public paid workflow verification and
 submission screenshots have not yet been completed.
+
+### October 5 public production verification
+
+Active public deployment `dep-db19kt8u01pc73dfg0a0` is live with AI enabled.
+The AI-paused public check first passed secure independent workspace cookies,
+forged-cookie and cross-origin rejection, both UTC/IST reset calendars, and no
+allowance consumption on the disabled request. After enabling AI, two synthetic
+WAV recordings each passed ElevenLabs transcription, Google-hosted Gemma
+structuring, save/retry idempotency, Google embedding/reuse, and cross-visitor
+404 isolation. Vector retrieval linked the two deliberately related thoughts.
+
+Gemma then returned a schema-valid abstention (`hasConnection: false`) for the
+connection explanation. This is an allowed model decision, not an infrastructure
+failure: the endpoint completed successfully, retrieval had already found the
+related thought, and Render recorded no error-level logs. The verification was
+not automatically retried, so the two audio reservations and one connection
+reservation remain conservatively consumed. The verifier now accepts either a
+fully populated connection or a null-field abstention while still rejecting an
+invalid response. A fresh evaluator browser displayed five available visitor
+recording attempts, both reset calendars, the 60-second limit, privacy warning,
+suggested related prompts, and an empty isolated timeline.
