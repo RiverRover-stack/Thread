@@ -61,8 +61,74 @@ unconfigured operation, nested spans, metadata filters, provider usage, original
 error propagation and a simulated delivery outage. No Sentry account or real AI
 credentials are needed for these tests.
 
-Live ingestion, deployed trace inspection and submission screenshots belong to
-milestone 2. They remain pending until a Sentry project is connected and deployed.
+## Milestone 2: hosted verification
+
+On October 4, 2026, the `thread` Next.js project was created in the Sentry
+organization `kaustubh-ye`. Its DSN was added to Render without replacing existing
+environment variables. Commit `1f9c875` deployed with monitoring enabled
+(`dep-db16jnad0e5s73ebso30`). Full sampling was used for synthetic verification;
+normal sampling was then restored to `0.1`.
+
+All 9 production HTTP checks passed at 15:02 UTC: health, ElevenLabs transcription,
+hosted Gemma structuring, persistence, the expected HTTP 409 before indexing,
+Google embedding/indexing, vector reuse, pgvector retrieval, and connection
+analysis. Retrieval found three earlier candidates; Gemma returned
+`hasConnection: false`, a valid abstention. One synthetic thought was added for
+this run. Statuses and full HTTP timings are in
+`plugin-artifacts/sentry-production-results.json`.
+
+Sentry's trace explorer received all seven stage types (10 stage spans including
+repeated indexing/retrieval). The measurements below are actual exported spans,
+not the full HTTP timings:
+
+| Operation | Duration |
+| --- | ---: |
+| ElevenLabs transcription | 1.40 s |
+| Gemma structuring | 2.18 s |
+| Google embedding | 254.14 ms |
+| First indexing, including embedding | 264.32 ms |
+| Reused indexing | 2.34 ms |
+| Connection workflow | 958.17 ms |
+| Retrieval within the workflow | 25.01 ms |
+| Gemma connection inference | 917.63 ms |
+
+The connection inference reported **949 input + 21 output = 970 tokens** for
+`gemma-4-26b-a4b-it`. Its Input and Output tabs showed no content, confirming
+the intended content exclusion in this inspected span. The SDK privacy tests
+cover the wider export allowlist. Sentry displayed a cost estimate of `<$0.01`;
+Thread does not report costs, and this dashboard estimate is not a Google bill
+or proof of free-tier usage.
+
+### Findings for the submission
+
+- Gemma inference consumed about 96% of the connection workflow in this run;
+  vector retrieval consumed about 3%. Model latency is the first place to
+  investigate for this workflow. This single sample does not establish p95 or
+  comparative model performance.
+- Reusing an existing vector avoided another embedding call: the index span
+  fell from 264.32 ms to 2.34 ms. Full HTTP latency remained around 290 ms, so
+  internal span time and user-perceived request time must be distinguished.
+- The deliberately requested pre-index retrieval returned HTTP 409 and created
+  `THREAD-1`, titled `Thread retrieve failed`. This is an expected guard, not an
+  outage; the current instrumentation groups any thrown retrieval failure as
+  an error. That distinction matters when interpreting alerts.
+- Next.js also exports enclosing spans through its framework instrumentation.
+  They are sanitized to `Thread request` with other attributes removed, which
+  preserves hierarchy but reduces diagnostic detail. Filter `has:thread.stage`
+  to inspect Thread's seven named operations.
+
+Evidence (requires your Sentry sign-in):
+
+- [Connection workflow and token counts](https://kaustubh-ye.sentry.io/explore/traces/trace/4d58a52d8ae044e681ece5aec37cfe04/?project=4512198546751568&node=span-89659a27ee63638c&tab=ai-spans)
+- [Expected retrieval guard issue](https://kaustubh-ye.sentry.io/issues/151259104/?project=4512198546751568)
+- Local screenshots: `plugin-artifacts/sentry-stage-spans.png`,
+  `sentry-connection-trace.png`, `sentry-agent-activity.png`, and
+  `sentry-guard-issue.png` in that directory.
+
+For a short manual check, process a synthetic thought in the deployed app, then
+open Sentry Traces with `has:thread.stage`. With normal 10% sampling, a particular
+request may not appear. For a deliberate verification session, temporarily use
+sample rate `1` and redeploy, then restore `0.1` afterward.
 
 Milestone 1 validation (October 4, 2026): all 99 tests passed, including 9
 observability tests; lint, TypeScript and production build passed. The privacy
