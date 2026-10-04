@@ -4,10 +4,13 @@ import { getThought } from "@/lib/db/thoughts";
 import ThoughtDetail from "@/components/thoughts/ThoughtDetail";
 import RetryLoading from "@/components/thoughts/RetryLoading";
 import RelatedThoughts from "@/components/thoughts/RelatedThoughts";
+import { headers } from "next/headers";
+import { accessFailure } from "@/lib/demo-access";
 
 export const dynamic = "force-dynamic";
 
 export default async function ThoughtPage({ params }: { params: Promise<{ id: string }> }) {
+  if (accessFailure(await headers())) return <main>Access denied. Reload Thread to sign in.</main>;
   const { id } = await params;
   let thought: Awaited<ReturnType<typeof getThought>>;
   try {

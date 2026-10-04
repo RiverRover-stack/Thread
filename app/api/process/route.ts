@@ -1,6 +1,7 @@
 import { structureThought } from "@/lib/ai";
 import { ThoughtStructuringError } from "@/lib/ai/errors";
 import { z } from "zod";
+import { requestAccessFailure } from "@/lib/demo-access";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,8 @@ function failure(message: string, status: number) {
 }
 
 export async function POST(request: Request) {
+  const access = requestAccessFailure(request);
+  if (access) return access;
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return failure("Send the transcript as JSON.", 415);
   }

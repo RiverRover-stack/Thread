@@ -1,5 +1,6 @@
 import { transcribeAudio } from "@/lib/speech";
 import { TranscriptionError } from "@/lib/speech/errors";
+import { requestAccessFailure } from "@/lib/demo-access";
 
 export const runtime = "nodejs";
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
@@ -10,6 +11,8 @@ function failure(message: string, status: number) {
 }
 
 export async function POST(request: Request) {
+  const access = requestAccessFailure(request);
+  if (access) return access;
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.toLowerCase().startsWith("multipart/form-data")) {
     return failure("Send the recording as multipart form data with an audio file.", 400);

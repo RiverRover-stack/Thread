@@ -1,10 +1,13 @@
 import { getThoughtConnection } from "@/lib/ai/thought-connection";
 import { ThoughtConnectionError } from "@/lib/ai/errors";
 import { EmbeddingError } from "@/lib/embeddings/errors";
+import { requestAccessFailure } from "@/lib/demo-access";
 
 export const runtime = "nodejs";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = requestAccessFailure(_request);
+  if (access) return access;
   try {
     const { id } = await params;
     const result = await getThoughtConnection(id);

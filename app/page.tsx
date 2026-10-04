@@ -5,10 +5,13 @@ import ThoughtTimeline from "@/components/thoughts/ThoughtTimeline";
 import Link from "next/link";
 import { Suspense } from "react";
 import TimelineLoading from "@/components/thoughts/TimelineLoading";
+import { headers } from "next/headers";
+import { accessFailure } from "@/lib/demo-access";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
+  if (accessFailure(await headers())) return <main>Access denied. Reload Thread to sign in.</main>;
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center px-6 py-16 sm:px-12">
       <p className="mb-8 text-lg font-semibold tracking-tight">Thread</p>

@@ -1,9 +1,12 @@
 import { getRelatedThoughts } from "@/lib/db/thoughts";
 import { EmbeddingError } from "@/lib/embeddings/errors";
+import { requestAccessFailure } from "@/lib/demo-access";
 
 export const runtime = "nodejs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const access = requestAccessFailure(_request);
+  if (access) return access;
   try {
     const { id } = await params;
     const relatedThoughts = await getRelatedThoughts(id);

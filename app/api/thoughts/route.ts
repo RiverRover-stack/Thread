@@ -2,6 +2,7 @@ import { z } from "zod";
 import { structuredThoughtSchema } from "@/lib/ai/schemas";
 import { getDatabase } from "@/lib/db/client";
 import { thoughtContentSelect } from "@/lib/db/thoughts";
+import { requestAccessFailure } from "@/lib/demo-access";
 
 export const runtime = "nodejs";
 const saveThoughtSchema = z.object({
@@ -16,6 +17,8 @@ function failure(error: string, status: number) {
 }
 
 export async function POST(request: Request) {
+  const access = requestAccessFailure(request);
+  if (access) return access;
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return failure("Send the thought as JSON.", 415);
   }
