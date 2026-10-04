@@ -1,10 +1,8 @@
 # Thread deployment — Phase 5
 
-Milestone 1 prepares deployment configuration. Milestone 2 now implements
-switchable local/hosted Gemma reasoning. Nothing has been provisioned or published.
-Hosted embeddings and a separate production database are now configured in the
-code/template. Resource creation, restricted access, and live API validation
-are still pending. Stop for verification after each milestone.
+Deployment configuration, hosted adapters, and the approved shared-password gate
+are committed. Production resource setup and deployed verification are in progress.
+Stop for verification after each milestone.
 
 ## Decisions before publishing
 
@@ -34,6 +32,7 @@ Sentry and Backboard remain optional. Existing PostgreSQL retrieval stays in pla
 | `lib/demo-access.ts` and `proxy.ts` | Shared-password validation, site-wide gate, and cross-site write rejection |
 | Pages and API route handlers | Repeat the access check before reading data or invoking providers |
 | `tests/demo-access.test.ts` | Missing configuration, credential, route coverage, and cross-site tests |
+| `scripts/verify-deployment.mjs` | HTTPS access checks and opt-in synthetic end-to-end verification |
 | `.env.example` | Local settings and production configuration guidance, without secrets |
 | `package.json` | Existing build, start, migration, and verification commands |
 | `prisma/migrations/` | Committed schema changes, including enabling pgvector |
@@ -271,6 +270,32 @@ Milestone 3 must verify the deployed HTTPS capture flow, saved data after restar
 related-thought links, model abstention, and provider failure/retry behavior. Use
 synthetic thoughts until restricted access is in place. No live verification is
 claimed by Milestone 1.
+
+For repeatable deployed checks, set the deployed password in an ignored
+`.env.render` file and run the following with the actual deployed origin:
+
+```text
+node --env-file=.env.render scripts/verify-deployment.mjs https://YOUR-SERVICE.onrender.com
+node --env-file=.env.render scripts/verify-deployment.mjs https://YOUR-SERVICE.onrender.com --write-synthetic
+```
+
+The first command checks health, unauthorized pages/APIs, authenticated access,
+and cross-site rejection. The second also calls hosted Gemma, saves three synthetic
+thoughts, indexes them, checks idempotent save/index retries, verifies the expected
+semantic match and weather exclusion, and requests a connection explanation.
+Each write-mode run creates three new thoughts, which remain for manual review;
+it consumes hosted API quota. It never connects to the local database. Microphone
+permission and actual ElevenLabs audio transcription require a separate capture
+check in the deployed browser. A health check alone does not verify those layers.
+
+## Password-gate validation record
+
+Verified locally on 4 October 2026: all 82 tests, ESLint, and the production build
+pass. Production HTTP checks confirm 401 for protected pages/APIs, 200 for public
+health and an authenticated page, 415 for an authenticated invalid payload, and
+403 for an authenticated cross-site write. Tests also cover production fail-closed
+configuration and independent API checks when the proxy is bypassed. The hosted
+adapter revision is `2acea21`; the gate revision is `9e034a2`.
 
 ## Debugging and recovery
 
