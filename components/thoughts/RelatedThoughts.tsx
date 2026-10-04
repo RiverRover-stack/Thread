@@ -56,28 +56,38 @@ export default function RelatedThoughts({ thoughtId }: { thoughtId: string }) {
 
   return (
     <>
-    <section aria-labelledby="related-heading" className="mt-8 rounded-xl border border-stone-300 bg-white p-5 sm:p-6">
+    <section aria-labelledby="related-heading" className="mt-8 min-w-0 rounded-2xl border border-stone-300 bg-white p-5 sm:p-8">
       <h2 id="related-heading" className="text-xl font-semibold">Related thoughts</h2>
       <p className="mt-2 text-sm text-stone-600">Earlier thoughts with similar meaning.</p>
-      {(state.kind === "indexing" || state.kind === "retrieving") && <p role="status" className="mt-4 text-stone-600">
+      {(state.kind === "indexing" || state.kind === "retrieving") && <div className="mt-5 rounded-xl bg-stone-50 p-4">
+        <p role="status" className="text-sm text-stone-600">
         {state.kind === "indexing" ? "Preparing semantic memory…" : "Finding related thoughts…"}
-      </p>}
-      {(state.kind === "indexing-error" || state.kind === "retrieval-error") && <div className="mt-4">
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-stone-500">Your thought is already saved. You can keep reading while this loads.</p>
+        <div aria-hidden="true" className="mt-4 space-y-2 motion-safe:animate-pulse">
+          <div className="h-4 w-2/3 rounded bg-stone-200" />
+          <div className="h-3 w-full rounded bg-stone-200" />
+        </div>
+      </div>}
+      {(state.kind === "indexing-error" || state.kind === "retrieval-error") && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed">
         <p role="alert" className="text-stone-700"><strong>{state.kind === "indexing-error" ? "Could not prepare semantic memory. " : "Could not find related thoughts. "}</strong>{state.message}</p>
-        <button type="button" onClick={() => { setState({ kind: "indexing" }); setAttempt((value) => value + 1); }} className="mt-3 font-semibold text-emerald-900 underline">Retry related thoughts</button>
+        <button type="button" onClick={() => { setState({ kind: "indexing" }); setAttempt((value) => value + 1); }} className="mt-3 min-h-11 rounded px-2 py-2 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">Retry related thoughts</button>
       </div>}
       {state.kind === "ready" && (state.thoughts.length === 0
-        ? <p className="mt-4 text-stone-600">No related earlier thoughts found yet.</p>
+        ? <div className="mt-5 rounded-xl border border-dashed border-stone-300 p-4">
+            <p className="text-sm font-semibold text-stone-700">No related earlier thoughts found yet.</p>
+            <p className="mt-2 text-sm leading-relaxed text-stone-600">Keep capturing ideas. Earlier thoughts will appear here when they share useful context.</p>
+          </div>
         : <ul className="mt-5 space-y-4">
-          {state.thoughts.map((thought) => <li key={thought.id} className="rounded-lg border border-stone-200 p-4">
-            <Link href={`/thoughts/${thought.id}`} className="break-words font-semibold text-emerald-900 underline">{thought.title}</Link>
-            {/* CHALLENGE: Show seconds in the card timestamp using its existing options.
-                TODO(you): Edit toLocaleString below. Hint 1: find minute. Hint 2: add
-                second with the same value. Verify: open a related card and see HH:MM:SS. */}
+          {state.thoughts.map((thought) => <li key={thought.id}>
+            <Link href={`/thoughts/${thought.id}`} aria-labelledby={`related-title-${thought.id}`} className="block min-w-0 rounded-xl border border-stone-200 p-4 transition-colors hover:border-emerald-700 hover:bg-emerald-50/30 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800">
+            <h3 id={`related-title-${thought.id}`} className="break-words font-semibold leading-snug text-emerald-900">{thought.title}</h3>
             <time dateTime={thought.createdAt} className="mt-2 block text-xs text-stone-500">{new Date(thought.createdAt).toLocaleString("en-GB", {
               day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC",
             })} UTC</time>
-            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-700">{thought.summary}</p>
+            <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-700">{thought.summary}</p>
+            <p aria-hidden="true" className="mt-3 text-sm font-semibold text-emerald-900">Revisit thought →</p>
+            </Link>
           </li>)}
         </ul>)}
     </section>

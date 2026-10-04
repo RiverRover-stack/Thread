@@ -161,7 +161,7 @@ export default function VoiceRecorder() {
       const result: unknown = await response.json();
       if (!response.ok) {
         const message = result && typeof result === "object" && "error" in result && typeof result.error === "string"
-          ? result.error : "Local AI processing failed. Please retry.";
+          ? result.error : "AI processing failed. Please retry.";
         throw new Error(message);
       }
       if (!result || typeof result !== "object" || !("structuredThought" in result) || !isStructuredThought(result.structuredThought)) {
@@ -174,10 +174,10 @@ export default function VoiceRecorder() {
     } catch (error) {
       if (!controller.signal.aborted) {
         setError(error instanceof Error && error.name === "TimeoutError"
-          ? "Local AI processing took too long. Keep Ollama running and retry."
+          ? "AI processing took too long. Please retry."
           : error instanceof TypeError || error instanceof SyntaxError
-            ? "Could not get a valid response from Thread. Check the app and Ollama are running, then retry."
-            : error instanceof Error ? error.message : "Local AI processing failed. Please retry.");
+            ? "Could not get a valid response from Thread. Check your connection and retry."
+            : error instanceof Error ? error.message : "AI processing failed. Please retry.");
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -337,43 +337,83 @@ export default function VoiceRecorder() {
   }
 
   const statusText = {
-    idle: savedThought ? "Thought saved to your database." : structuredThought ? "Thought structured, but not saved. Retry saving below." : transcript ? "Transcript ready. Retry local AI processing below." : recording ? "Audio captured. Play it back below or retry transcription." : "Ready when you are.",
+    idle: savedThought ? "Your thought is saved. You can return to it anytime." : structuredThought ? "Your interpretation is ready. Retry saving below." : transcript ? "Your transcript is ready. Retry processing below." : recording ? "Your recording is ready. Play it back below or retry transcription." : "Speak naturally. A few seconds is enough to capture an idea.",
     requesting: "Waiting for microphone permission. Check your browser's permission prompt.",
     recording: "Recording. Speak your thought, then press Stop recording.",
     stopping: "Finishing your recording…",
     transcribing: "Transcribing your thought…",
-    structuring: "Gemma is structuring your thought locally. The first run can take longer…",
+    structuring: "Gemma is making sense of your thought. The first run can take longer…",
     saving: "Saving your thought…",
   }[status];
   const elapsedTime = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
+  const isProcessing = status === "transcribing" || status === "structuring" || status === "saving";
+  const isDisabled = status === "requesting" || status === "stopping" || isProcessing;
+  const steps = [
+    { label: "Transcribe", complete: !!transcript, active: status === "transcribing" },
+    { label: "Make sense", complete: !!structuredThought, active: status === "structuring" },
+    { label: "Save", complete: !!savedThought, active: status === "saving" },
+  ];
 
   return (
-    <section aria-labelledby="capture-heading" className="mt-10 rounded-2xl border border-stone-300 bg-white p-6 sm:p-8">
+    <section aria-labelledby="capture-heading" className="mt-10 min-w-0 rounded-2xl border border-stone-300 bg-white p-6 sm:p-8">
       <h2 id="capture-heading" className="text-xl font-semibold">Capture a thought</h2>
       <p className="mt-2 text-sm leading-relaxed text-stone-600">
-        When you stop recording, audio is sent to ElevenLabs for transcription, then Gemma structures the transcript locally through Ollama.
-        Your transcript and interpretation are saved to PostgreSQL. Audio playback is temporary and clears when you refresh.
+        Say what&apos;s on your mind. Stop when you&apos;re done, and Thread will turn it into a thought you can come back to.
       </p>
-      <div className="mt-6">
+      <p className="mt-2 text-xs leading-relaxed text-stone-500">
+        Audio goes to ElevenLabs for transcription. Gemma interprets it locally. Audio playback is temporary and clears when you refresh.
+      </p>
+      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center">
         <button
           type="button"
           onClick={status === "recording" ? stopRecording : startRecording}
-          disabled={status === "requesting" || status === "stopping" || status === "transcribing" || status === "structuring" || status === "saving"}
-          className="min-h-12 rounded-full bg-emerald-900 px-6 py-3 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800 disabled:cursor-wait disabled:opacity-60"
+          disabled={isDisabled}
+          className={`flex min-h-14 items-center justify-center gap-3 rounded-full px-6 py-3 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-800 disabled:cursor-wait disabled:opacity-60 ${status === "recording" ? "bg-red-700 hover:bg-red-800" : "bg-emerald-900 hover:bg-emerald-800"}`}
         >
-          {status === "recording" ? "Stop recording" : status === "requesting" ? "Requesting microphone…" : status === "stopping" ? "Finishing…" : status === "transcribing" ? "Transcribing…" : status === "structuring" ? "Structuring locally…" : status === "saving" ? "Saving…" : recording ? "Record again" : "Record a thought"}
+          {status === "recording" ? <span aria-hidden="true" className="h-3 w-3 rounded-sm bg-white" /> : isDisabled ? (
+            <span aria-hidden="true" className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white motion-safe:animate-spin" />
+          ) : (
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+            </svg>
+          )}
+          {status === "recording" ? "Stop recording" : status === "requesting" ? "Requesting microphone…" : status === "stopping" ? "Finishing…" : status === "transcribing" ? "Transcribing…" : status === "structuring" ? "Making sense…" : status === "saving" ? "Saving…" : recording ? "Record another thought" : "Record a thought"}
         </button>
+        {(status === "recording" || status === "stopping") && (
+          <div className="flex items-center gap-3 text-red-800">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-red-600 motion-safe:animate-pulse" />
+            <span className="text-sm font-semibold">{status === "recording" ? "Recording" : "Finishing"}</span>
+            <span aria-label="Recording duration" role="timer" className="font-mono text-xl tabular-nums">{elapsedTime}</span>
+          </div>
+        )}
       </div>
-      <p role="status" className="mt-4 text-sm leading-relaxed text-stone-700">
-        {status === "recording" && <span aria-hidden="true" className="mr-2 inline-block h-2 w-2 rounded-full bg-red-600" />}
-        {statusText}{(status === "recording" || status === "stopping") && <span className="ml-2 font-mono tabular-nums">{elapsedTime}</span>}
+      <p role="status" aria-atomic="true" className="mt-4 text-sm leading-relaxed text-stone-700">
+        {statusText}
       </p>
-      {error && <p role="alert" className="mt-4 text-sm leading-relaxed text-red-800">{error}</p>}
+      {(isProcessing || recording || transcript || structuredThought || savedThought) && (
+        <ol aria-label="Thought processing progress" className="mt-5 grid grid-cols-3 gap-2">
+          {steps.map((step, index) => (
+            <li key={step.label} aria-current={step.active ? "step" : undefined} className={`min-w-0 rounded-lg border px-2 py-3 text-center text-xs sm:text-sm ${step.complete ? "border-emerald-200 bg-emerald-50 text-emerald-900" : step.active ? "border-emerald-700 bg-white font-semibold text-emerald-900" : "border-stone-200 bg-stone-50 text-stone-500"}`}>
+              <span aria-hidden="true" className="mb-1 block">{step.complete ? "✓" : index + 1}</span>
+              {step.label}
+              <span className="sr-only">{step.complete ? ": complete" : step.active ? ": in progress" : ": pending"}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {error && (
+        <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-relaxed text-red-900">
+          <p className="font-semibold">Something needs your attention</p>
+          <p className="mt-1 break-words">{error}</p>
+        </div>
+      )}
       {savedThought && (
-        <p className="mt-3 text-sm text-emerald-900">
-          Saved at {new Date(savedThought.createdAt).toLocaleString()}
-          {" · "}<Link href={`/thoughts/${savedThought.id}`} className="font-semibold underline">Open saved thought</Link>
-        </p>
+        <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-semibold">Thought saved</p>
+          <p className="mt-1">Saved at <time dateTime={savedThought.createdAt}>{new Date(savedThought.createdAt).toLocaleString()}</time></p>
+          <Link href={`/thoughts/${savedThought.id}`} className="mt-2 inline-flex min-h-11 items-center rounded font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2">Open saved thought →</Link>
+        </div>
       )}
       {savedThought && indexing?.id === savedThought.id && (
         <div className="mt-3 text-sm text-stone-600">
@@ -382,38 +422,35 @@ export default function VoiceRecorder() {
               : indexing.status === "ready" ? "Ready for semantic search."
                 : "Your thought is saved, but semantic memory could not be prepared. Retry now or open the saved thought later."}
           </p>
-          {indexing.status === "error" && <button type="button" onClick={() => void requestIndexing(savedThought.id)} className="mt-2 font-semibold text-emerald-900 underline">Retry semantic memory</button>}
+          {indexing.status === "error" && <button type="button" onClick={() => void requestIndexing(savedThought.id)} className="mt-2 min-h-11 rounded px-2 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">Retry semantic memory</button>}
         </div>
       )}
       {transcript && structuredThought && !savedThought && status === "idle" && (
-        <button type="button" onClick={() => void saveThought(transcript, structuredThought)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
+        <button type="button" onClick={() => void saveThought(transcript, structuredThought)} className="mt-4 min-h-11 rounded px-2 py-2 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
           Retry saving
         </button>
       )}
       {recording && !transcript && status === "idle" && (
-        <button type="button" onClick={() => void requestTranscript(recording.blob)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
+        <button type="button" onClick={() => void requestTranscript(recording.blob)} className="mt-4 min-h-11 rounded px-2 py-2 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
           Retry transcription
         </button>
       )}
       {transcript && !structuredThought && status === "idle" && (
-        <button type="button" onClick={() => void requestStructuredThought(transcript)} className="mt-4 rounded px-2 py-1 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
-          Retry local AI processing
+        <button type="button" onClick={() => void requestStructuredThought(transcript)} className="mt-4 min-h-11 rounded px-2 py-2 font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-2">
+          Retry processing
         </button>
       )}
-      {/* CHALLENGE: Add a Copy transcript button without changing the transcript.
-          TODO(you): Use the clipboard API; show success only after it resolves.
-          Verify: Paste elsewhere and compare punctuation and line breaks. */}
       {transcript && (
         <section aria-labelledby="transcript-heading" className="mt-6 border-t border-stone-200 pt-6">
           <h3 id="transcript-heading" className="text-sm font-semibold tracking-wide">USER SAID · TRANSCRIPT</h3>
-          <p className="mt-3 whitespace-pre-wrap leading-relaxed">{transcript}</p>
+          <p className="mt-3 whitespace-pre-wrap break-words leading-relaxed">{transcript}</p>
         </section>
       )}
       {structuredThought && (
         <section aria-labelledby="interpretation-heading" className="mt-6 rounded-xl bg-stone-100 p-5">
           <p className="text-xs font-semibold tracking-widest text-emerald-900">AI INTERPRETED · LOCAL GEMMA</p>
-          <h3 id="interpretation-heading" className="mt-2 text-xl font-semibold">{structuredThought.title}</h3>
-          <p className="mt-3 leading-relaxed text-stone-700">{structuredThought.summary}</p>
+          <h3 id="interpretation-heading" className="mt-2 break-words text-xl font-semibold">{structuredThought.title}</h3>
+          <p className="mt-3 break-words leading-relaxed text-stone-700">{structuredThought.summary}</p>
           <ul aria-label="Categories" className="mt-4 flex flex-wrap gap-2">
             {structuredThought.categories.map((category) => (
               <li key={category} className="rounded-full bg-white px-3 py-1 text-sm text-stone-700">{category}</li>
@@ -422,20 +459,17 @@ export default function VoiceRecorder() {
           {structuredThought.possibleAction && (
             <div className="mt-5">
               <h4 className="text-sm font-semibold">Possible action</h4>
-              <p className="mt-1 text-stone-700">{structuredThought.possibleAction}</p>
+              <p className="mt-1 break-words text-stone-700">{structuredThought.possibleAction}</p>
             </div>
           )}
           {structuredThought.questionToExplore && (
             <div className="mt-5">
               <h4 className="text-sm font-semibold">Question to explore</h4>
-              <p className="mt-1 text-stone-700">{structuredThought.questionToExplore}</p>
+              <p className="mt-1 break-words text-stone-700">{structuredThought.questionToExplore}</p>
             </div>
           )}
         </section>
       )}
-      {/* CHALLENGE: Add a Copy interpretation button without mixing it with USER SAID.
-          TODO(you): Format title, summary, categories, action, and question as plain text.
-          Verify: Copy a thought with both nullable fields absent and present. */}
       {recording && (
         <div className="mt-6 border-t border-stone-200 pt-6">
           <audio key={recording.url} controls src={recording.url} aria-label="Recorded thought playback" className="w-full" />

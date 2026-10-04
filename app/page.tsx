@@ -3,6 +3,8 @@
 import VoiceRecorder from "@/components/capture/VoiceRecorder";
 import ThoughtTimeline from "@/components/thoughts/ThoughtTimeline";
 import Link from "next/link";
+import { Suspense } from "react";
+import TimelineLoading from "@/components/thoughts/TimelineLoading";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +19,10 @@ export default function Home() {
         A place for the ideas that arrive before you have the words in order.
       </p>
       <VoiceRecorder />
-      <div className="mt-6"><Link href="/thoughts" className="font-semibold text-emerald-900 underline">View your timeline</Link></div>
-      <ThoughtTimeline />
+      <div className="mt-6"><Link href="/thoughts" className="inline-flex min-h-11 items-center rounded font-semibold text-emerald-900 underline focus-visible:outline-2 focus-visible:outline-offset-4">View your timeline</Link></div>
+      <Suspense fallback={<TimelineLoading />}>
+        <ThoughtTimeline />
+      </Suspense>
     </main>
   );
 }

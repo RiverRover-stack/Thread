@@ -10,3 +10,12 @@
 body {
   margin: 0;
 }
+
+/* Let long transcripts and model output wrap inside narrow cards. */
+p, h1, h2, h3, h4, li {
+  overflow-wrap: anywhere;
+}
+
+button, a, summary {
+  -webkit-tap-highlight-color: transparent;
+}
