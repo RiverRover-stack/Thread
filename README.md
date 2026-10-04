@@ -2,7 +2,7 @@
 
 > A voice-first thought companion for ideas that arrive before the words are in order.
 
-[Try the public demo](https://thread-e5b3.onrender.com/) · [Deployment guide](DEPLOYMENT.md) · [Project specification](PROJECT_SPEC.md)
+[Try the public demo](https://thread-e5b3.onrender.com/)
 
 Thread helps someone capture an unfinished thought without stopping to write and organise it. A person speaks naturally, and the application preserves the transcript, creates a structured interpretation, and saves both to a timeline.
 
@@ -162,8 +162,6 @@ lib/observability/    Privacy-filtered tracing
 prisma/               Schema and versioned migrations
 tests/                Automated behavior and boundary tests
 ```
-
-For production configuration and provider switching, see [DEPLOYMENT.md](DEPLOYMENT.md). For tracing behavior and its privacy boundary, see [SENTRY.md](SENTRY.md).
 
 ## License
 

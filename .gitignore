@@ -3,8 +3,8 @@ first_prompt.txt
 
 # Markdown documents (keep repository entry-point instructions)
 *.md
-!README.md
-!AGENTS.md
+!/README.md
+!/AGENTS.md
 
 # Local configuration and secrets
 .env*
@@ -25,4 +25,4 @@ generated/
 local_postgres.session.sql
 docs
 
-plugin-artifacts
+/plugin-artifacts/
